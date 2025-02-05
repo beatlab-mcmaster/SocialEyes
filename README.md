@@ -1,9 +1,59 @@
+<div align="center">
+  <a href="https://github.com/beatlab-mcmaster/SocialEyes">
+    <img src="refs/logo.png" alt="SocialEyes logo" width="200">
+  </a>
+</div>
 
-<img src="refs/logo.png" alt="SocialEyes logo" width="300">
+<div align="center">
+  <!-- SocialEyes -->
+  <br />
+  <a href="#example-screenshot"><strong>See example screenshot »</strong></a>
+  <br />
+  <br />
+  <a href="https://github.com/beatlab-mcmaster/SocialEyes/issues/new?assignees=&labels=bug&template=01_BUG_REPORT.md&title=bug%3A+">Report a Bug</a>
+  ·
+  <a href="https://github.com/beatlab-mcmaster/SocialEyes/issues/new?assignees=&labels=enhancement&template=02_FEATURE_REQUEST.md&title=feat%3A+">Request a Feature</a>
+  .
+  <a href="https://github.com/beatlab-mcmaster/SocialEyes/discussions">Ask a Question</a>
+</div>
+
+<div align="center">
+<br />
+
+[![Project license](https://img.shields.io/github/license/beatlab-mcmaster/SocialEyes.svg?style=flat-square)](LICENSE)
+
+[![Pull Requests welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg?style=flat-square)](https://github.com/beatlab-mcmaster/socialeyes/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+[![code with love by ShreshthSaxena](https://img.shields.io/badge/%3C%2F%3E%20with%20%E2%99%A5%20by-ShreshthSaxena-ff1414.svg?style=flat-square)](https://github.com/ShreshthSaxena)
+</div>
+
+
+<details open="open">
+<summary>Table of Contents</summary>
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+    - [Hardware](#hardware)
+    - [Software](#software)
+- [Quick start](#quick-start)
+- [Interfaces](#interfaces)
+    - [Terminal User Interface (TUI)](#terminal-user-interface-tui)
+    - [Centralcam interface](#centralcam-interface)
+    - [Offline interface](#offline-interface)
+- [Code Structure](#code-structure)
+    - [SocialEyes modules](#socialeyes-modules)
+    - [Configuration files](#configuration-files)
+    - [SocialEyes paper analysis code](#socialeyes-paper-analysis-code)
+- [Example screenshot](#example-screenshot)
+- [Citation](#citation)
+- [License Information](#license-information)
+
+</details>
+
+---
 
 ## Overview 
 
-**SocialEyes** is designed to enable **eye-tracking in multi-person, real-world settings** using mobile eye-tracking glasses.  
+**SocialEyes** enables **eye-tracking in multi-person, real-world settings** using mobile eye-tracking glasses. 
 
 For a detailed description, refer to the original paper:  
 ***SocialEyes: Scaling Mobile Eye-Tracking to Multi-Person Social Settings.***  
@@ -12,42 +62,44 @@ The paper presents a hardware-agnostic system architecture for multi-person mobi
 
 This repository contains a reference implementation of the SocialEyes architecture, used in the Utility Test presented in the paper. It serves as a proof-of-concept demonstrating the viability of our system architecture in real-world contexts.
 
-
 <!-- <a href="https://discord.gg/W5M57u9hFz">
     <img src="https://img.shields.io/discord/308323056592486420?logo=discord&logoColor=white"
         alt="Chat on Discord"></a> -->
 
-## Hardware prerequisites
+## Prerequisites
+
+
+### Hardware
 
 This implementation relies on the following hardware for data collection:
 - Eye-tracking glasses: [Pupil Labs' Neon](https://pupil-labs.com/products/neon). 
 - Centralview Camera: Any standard USB or network webcam. Compatibility for [ArduCam's Camera Evaluation Kit](https://www.arducam.com/product/arducam-2-2mp-mira220-rgb-ir-global-shutter-usb3-0-camera-evaluation-kit/) is also provided but currently lacks Image Signal Processing (ISP) support from the manufacturer.
 
-## Software prerequisites
+### Software 
 
 To execute any of the provided code, download and install the latest Python distribution: [https://www.python.org/downloads/](https://www.python.org/downloads/)
 
 To ensure dependencies are properly managed, we recommended creating a separate Python environment using conda or virtualenv. 
 
-**Using Conda (Recommended)**
-- Install Anaconda or Miniconda from [https://docs.anaconda.com/getting-started/](https://docs.anaconda.com/getting-started/)
-- Create a new environment: `conda create -n SocialEyes python=3.x`
-- Activate the environment: `conda activate SocialEyes`
+>  **Using Conda (Recommended)**
+  - Install Anaconda or Miniconda from [https://docs.anaconda.com/getting-started/](https://docs.anaconda.com/getting-started/)
+  - Create a new environment: `conda create -n SocialEyes python=3.10`
+  - Activate the environment: `conda activate SocialEyes`
 
-**Using Virtualenv**
+>  **Using Virtualenv**
 
-- Install virtualenv: `pip install virtualenv`
-- Create a new environment: `virtualenv SocialEyes`
-- Activate the environment 
-    - On Linux/macOS:`source SocialEyes/bin/activate`
-    - On Windows: `.\SocialEyes\Scripts\activate `
+  - Install virtualenv: `pip install virtualenv`
+  - Create a new environment: `virtualenv SocialEyes`
+  - Activate the environment 
+      - On Linux/macOS:`source SocialEyes/bin/activate`
+      - On Windows: `.\SocialEyes\Scripts\activate `
 
-## Quick Start
+## Quick start
 
 - Clone the repository: `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
 - Navigate to code: `cd SocialEyes`
-- Install code dependencies `pip install -r requirements.txt`. 
-- Run demo.py: `python3 demo.py`
+- Install code dependencies `pip install -r requirements.txt` 
+- Run demo.py: `python demo.py`
 
 The demo script links to the three main operator interfaces in SocialEyes recording mode, defined below:
 
@@ -70,19 +122,19 @@ The bottom bar presents a list of actions that can be performed on the selected 
 <img src="refs/tui.jpg" alt="TUI" width="1000">
 
 
-### CentralCam Interface
+### CentralCam interface
 The CentralCam interface operates the centralview Camera recording. By default, the CentralCam module records video and metrics from the default webcam on a computer. The recording device and related parameters can be set using the config file at `src/centralCam/config.json`
 
 Recording starts upon execution of the module and can be manually stopped at any point using a Keyboard Interrupt (Ctrl/Cmd + C)
 
 
-### Offline Interface
+### Offline interface
 The offline interface facilitates analysis on the recorded data. It allows downloading data from Pupil Cloud or using locally stored data to perform operations of `homography`, `analysis`, and `visualisation` modules. 
 
 The Offline interface can be operated using arrow keys to navigate different options and using the command line interface to input text or filepaths.
 
 
-## Code Structure
+## Code structure
 
 ### SocialEyes modules
 
@@ -112,7 +164,7 @@ An example visualisation of 30 eye-tracking datasets recorded and analysed with 
 <img src="refs/example.png" alt="SocialEyes example" width="1000">
 
 
-## Bibtex   
+## Citation   
 
 If you use any ideas from the paper or code from this repo, please cite the original work:
 

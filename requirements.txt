@@ -1,6 +1,4 @@
 pupil_labs_realtime_api
-arducam_config_parser
-ArducamSDK
 pytz
 questionary
 requests
