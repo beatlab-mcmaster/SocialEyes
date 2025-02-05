@@ -1,0 +1,15 @@
+{
+    "homography": {
+        "setting": "outdoor",
+        "max_keypoints": 1024,
+        "keypoint_threshold": 0.005,
+        "nms_radius": 4,
+        "resize": [640, 480],
+        "skip": 1,
+        "image_glob": ["*.png", "*.jpg", "*.jpeg"],
+        "max_length": 1000000,
+        "sinkhorn_iterations": 20,
+        "match_threshold": 0.3,
+        "force_cpu": false
+    }
+}

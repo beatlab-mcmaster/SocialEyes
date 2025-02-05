@@ -1,0 +1,21 @@
+
+{
+    "output_dir": "outputs/",
+    "frame_drop_threshold": 600,
+    "show_preview": true,
+    "camera_input": "standard",
+    "standard": {
+        "cam_src": 1, 
+        "write_to_raw": false,
+        "fps_calc_window": 180,
+        "resolution": {
+            "width": 640,
+            "height": 480
+        }
+    },
+    "arducam": {
+        "arducam_config": "arducam_config/xx.cfg",
+        "verbose": 0,
+        "scale_width": -1
+    }
+}

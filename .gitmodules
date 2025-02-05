@@ -1,0 +1,6 @@
+[submodule "src/offlineInterface/srch/pl-rec-export"]
+	path = src/offlineInterface/srch/pl-rec-export
+	url = https://github.com/pupil-labs/pl-rec-export
+[submodule "src/homography/SuperGluePretrainedNetwork"]
+	path = src/homography/SuperGluePretrainedNetwork
+	url = https://github.com/magicleap/SuperGluePretrainedNetwork.git

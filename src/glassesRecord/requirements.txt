@@ -1,0 +1,4 @@
+textual
+textual-dev
+numpy
+requests

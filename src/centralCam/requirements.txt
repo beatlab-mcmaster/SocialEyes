@@ -1,0 +1,6 @@
+opencv-python>=4.1.2.30
+numpy>=1.18.1
+pandas
+tqdm
+arducam_config_parser
+ArducamSDK

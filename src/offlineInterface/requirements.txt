@@ -1,0 +1,17 @@
+pupil_labs_realtime_api
+-e git+https://github.com/pupil-labs/pl-rec-export.git#egg=pl-rec-export
+pytz
+questionary
+urllib3
+tqdm
+scikit-learn
+scipy
+pupil-labs-realtime-api==1.1.3
+matplotlib>=3.1.3
+matplotlib-inline
+torch>=1.1.0
+opencv-python>=4.1.2.30
+numpy>=1.18.1
+pandas
+seaborn
+st_dbscan
