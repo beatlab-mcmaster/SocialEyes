@@ -4,8 +4,8 @@ src/centralCam/arducam_config/*
 src/centralCam/outputs/
 src/glassesRecord/logs/
 
-#SuperGlue local copy
-# src/homography/SuperGluePretrainedNetwork
+#pl-export 
+src/offlineInterface/srch*
 
 #Homography processor created for CHI revisions
 src/homography/homography_processor_temp.py
