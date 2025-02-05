@@ -12,6 +12,11 @@ The paper presents a hardware-agnostic system architecture for multi-person mobi
 
 This repository contains a reference implementation of the SocialEyes architecture, used in the Utility Test presented in the paper. It serves as a proof-of-concept demonstrating the viability of our system architecture in real-world contexts.
 
+
+<!-- <a href="https://discord.gg/W5M57u9hFz">
+    <img src="https://img.shields.io/discord/308323056592486420?logo=discord&logoColor=white"
+        alt="Chat on Discord"></a> -->
+
 ## Hardware prerequisites
 
 This implementation relies on the following hardware for data collection:
@@ -39,7 +44,7 @@ To ensure dependencies are properly managed, we recommended creating a separate 
 
 ## Quick Start
 
-- Clone the repository: `git clone --recurse-submodules  SocialEyes`
+- Clone the repository: `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
 - Navigate to code: `cd SocialEyes`
 - Install code dependencies `pip install -r requirements.txt`. 
 - Run demo.py: `python3 demo.py`
