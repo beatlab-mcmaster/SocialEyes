@@ -96,12 +96,26 @@ To ensure dependencies are properly managed, we recommended creating a separate 
 
 ## Quick start
 
-- Clone the repository: `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
-- Navigate to code: `cd SocialEyes`
-- Install code dependencies `pip install -r requirements.txt` 
-- Run demo.py: `python demo.py`
+> Using container (recommended for Windows and Mac OS)
 
-The demo script links to the three main operator interfaces in SocialEyes recording mode, defined below:
+  - Install [Docker](https://docs.docker.com/get-started/get-docker/) (or your preferred containerization tool)
+  - Clone the repository: `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
+  - Build the image: `docker build -t socialeyes-img .`
+  - Mount drive and run the container in privileged mode to allow access to local machine's resources (USB/camera/network):
+    ```
+      docker run --rm -it --privileged -v $(pwd):/SocialEyes socialeyes-img
+    ```
+    HINT: On windows, use ${PWD} in PowerShell.
+
+
+> Using source (tested on Ubuntu 22.04.03 LTS, ADB v28, and Python 3.9+)
+
+  - Clone the repository: `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
+  - Navigate to code: `cd SocialEyes`
+  - Install code dependencies `pip install -r requirements.txt` 
+  - Run demo.py: `python demo.py`
+
+The quick start opens a demo script that links to the three main operator interfaces in SocialEyes recording mode, defined below:
 
 
 ## Interfaces 
@@ -152,8 +166,6 @@ The Offline interface can be operated using arrow keys to navigate different opt
 ### SocialEyes paper analysis code
 
 All code used to generate results and figures for the SocialEyes paper can be found in ['src/analysis/Utility test analysis code/'](src/analysis/Utility%20test%20analysis%20code/)
-
-> Note: The code was tested on Ubuntu 22.04.03 LTS, ADB v28, and Python 3.9+, but should work with other versions with minor adjustments.
 
 
 ## Example screenshot

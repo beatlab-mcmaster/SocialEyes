@@ -1,4 +1,5 @@
 src/centralCam/arducam_config/*
+venv/*
 
 # Output data files
 src/centralCam/outputs/
