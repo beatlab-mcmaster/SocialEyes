@@ -7,7 +7,7 @@
 <div align="center">
   <!-- SocialEyes -->
   <br />
-  <a href="#example-screenshot"><strong>See example screenshot »</strong></a>
+  <a href="https://tinyurl.com/socialeyes-beatlab"><strong>Check out an example video of the output »</strong></a>
   <br />
   <br />
   <a href="https://github.com/beatlab-mcmaster/SocialEyes/issues/new?assignees=&labels=bug&template=01_BUG_REPORT.md&title=bug%3A+">Report a Bug</a>
@@ -20,10 +20,10 @@
 <div align="center">
 <br />
 
-[![Project license](https://img.shields.io/github/license/beatlab-mcmaster/SocialEyes.svg?style=flat-square)](LICENSE)
+[![License: NCRL-1.0](https://img.shields.io/badge/License-NCRL--1.0-red)](./LICENSE) ![Ubuntu](https://img.shields.io/badge/OS-Ubuntu-orange?logo=ubuntu) ![Docker](https://img.shields.io/badge/Windows%20%26%20macOS-Using%20Docker-blue?logo=docker) [![Published in ACM SIGCHI](https://img.shields.io/badge/Published%20in-ACM%20SIGCHI-pink?logo=acm)](https://chi2025.acm.org/)[![DOI](https://img.shields.io/badge/DOI-10.1145%2F1234567-gray)](10.1145/3706598.3713910)
 
-[![Pull Requests welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg?style=flat-square)](https://github.com/beatlab-mcmaster/socialeyes/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
-[![code with love by ShreshthSaxena](https://img.shields.io/badge/%3C%2F%3E%20with%20%E2%99%A5%20by-ShreshthSaxena-ff1414.svg?style=flat-square)](https://github.com/ShreshthSaxena)
+
+<!-- [![Pull Requests welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg?style=flat-square)](https://github.com/beatlab-mcmaster/socialeyes/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) -->
 </div>
 
 
@@ -31,9 +31,8 @@
 <summary>Table of Contents</summary>
 
 - [Overview](#overview)
-- [Prerequisites](#prerequisites)
-    - [Hardware](#hardware)
-    - [Software](#software)
+- [Hardware prerequisites](#hardware-prerequisites)
+- [Software prerequisites](#software-prerequisites)
 - [Quick start](#quick-start)
 - [Interfaces](#interfaces)
     - [Terminal User Interface (TUI)](#terminal-user-interface-tui)
@@ -66,57 +65,78 @@ This repository contains a reference implementation of the SocialEyes architectu
     <img src="https://img.shields.io/discord/308323056592486420?logo=discord&logoColor=white"
         alt="Chat on Discord"></a> -->
 
-## Prerequisites
-
-
-### Hardware
+## Hardware Prerequisites
 
 This implementation relies on the following hardware for data collection:
 - Eye-tracking glasses: [Pupil Labs' Neon](https://pupil-labs.com/products/neon). 
 - Centralview Camera: Any standard USB or network webcam. Compatibility for [ArduCam's Camera Evaluation Kit](https://www.arducam.com/product/arducam-2-2mp-mira220-rgb-ir-global-shutter-usb3-0-camera-evaluation-kit/) is also provided but currently lacks Image Signal Processing (ISP) support from the manufacturer.
 
-### Software 
+## Software Prerequisites 
 
-To execute any of the provided code, download and install the latest Python distribution: [https://www.python.org/downloads/](https://www.python.org/downloads/)
+You can execute the code either with a software container (using Docker, Podman, etc.) or by building it from source. Please note that the source has only been tested on Ubuntu OS. Below are some prerequisites you may need when running the software:
 
-To ensure dependencies are properly managed, we recommended creating a separate Python environment using conda or virtualenv. 
+### 1. Using a Container (Recommended for Windows and macOS)
+- Install [Docker](https://docs.docker.com/get-started/get-docker/) (or your preferred containerization tool).
 
->  **Using Conda (Recommended)**
-  - Install Anaconda or Miniconda from [https://docs.anaconda.com/getting-started/](https://docs.anaconda.com/getting-started/)
-  - Create a new environment: `conda create -n SocialEyes python=3.10`
-  - Activate the environment: `conda activate SocialEyes`
+### 2. Using Source
+- Install the latest Python distribution: [Download Python](https://www.python.org/downloads/)
 
->  **Using Virtualenv**
+To ensure dependencies are properly managed, we recommend creating a separate Python environment using either **conda** or **virtualenv**.
 
-  - Install virtualenv: `pip install virtualenv`
-  - Create a new environment: `virtualenv SocialEyes`
-  - Activate the environment 
-      - On Linux/macOS:`source SocialEyes/bin/activate`
-      - On Windows: `.\SocialEyes\Scripts\activate `
+> **With Conda (Recommended)**
+
+- Install Anaconda or Miniconda from [here](https://docs.anaconda.com/getting-started/).
+- Create a new environment:  
+  `conda create -n SocialEyes python=3.10`
+- Activate the environment:  
+  `conda activate SocialEyes`
+
+> **With Virtualenv**
+
+- Install virtualenv:  
+  `pip install virtualenv`
+- Create a new environment:  
+  `virtualenv SocialEyes`
+- Activate the environment:
+  - On **Linux/macOS**:  
+    `source SocialEyes/bin/activate`
+  - On **Windows**:  
+    `.\SocialEyes\Scripts\activate`
 
 ## Quick start
 
-> Using container (recommended for Windows and Mac OS)
+### **Using Container (Recommended for Windows and macOS)**
 
-  - Install [Docker](https://docs.docker.com/get-started/get-docker/) (or your preferred containerization tool)
-  - Clone the repository: `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
-  - Build the image: `docker build -t socialeyes-img .`
-  - Mount drive and run the container in privileged mode to allow access to local machine's resources (USB/camera/network):
+1. Clone the repository:  
+   `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
+   
+2. Build the Docker image:  
+   `docker build -t socialeyes-img .`
+   
+3. Mount your drive and run the container in privileged mode to allow access to local machine resources (USB/camera/network):
+    ```bash
+    docker run --rm -it --privileged -v $(pwd):/SocialEyes socialeyes-img
     ```
-      docker run --rm -it --privileged -v $(pwd):/SocialEyes socialeyes-img
-    ```
-    HINT: On windows, use ${PWD} in PowerShell.
+    **Hint**: On Windows, use `${PWD}` in PowerShell instead of `$(pwd)`.
 
 
-> Using source (tested on Ubuntu 22.04.03 LTS, ADB v28, and Python 3.9+)
 
-  - Clone the repository: `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
-  - Navigate to code: `cd SocialEyes`
-  - Install code dependencies `pip install -r requirements.txt` 
-  - Run demo.py: `python demo.py`
+### **Using Source (Tested on Ubuntu 22.04.03 LTS, ADB v28, and Python 3.9+)**
 
-The quick start opens a demo script that links to the three main operator interfaces in SocialEyes recording mode, defined below:
+1. Clone the repository:  
+   `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
 
+2. Navigate to the code directory:  
+   `cd SocialEyes`
+
+3. Install the required dependencies:  
+   `pip install -r requirements.txt`
+
+4. Run the demo script:  
+   `python demo.py`
+
+
+The quick start opens a demo script that links to the three main operator interfaces in SocialEyes recording mode, as defined below:
 
 ## Interfaces 
 
@@ -168,12 +188,12 @@ The Offline interface can be operated using arrow keys to navigate different opt
 All code used to generate results and figures for the SocialEyes paper can be found in ['src/analysis/Utility test analysis code/'](src/analysis/Utility%20test%20analysis%20code/)
 
 
-## Example screenshot
+## Example snapshots
 
-An example visualisation of 30 eye-tracking datasets recorded and analysed with this implementation is presented below for reference. The gaze from 30 wearers--recorded using the GlassesRecord modul--is mapped and projected to a common space, the centerview--recorded using the CentralCam module. Projected gaze from all wearers is presented as a heatmap in the central grid cell with each wearer's egocentric gaze and worldview recording in the surrounding cells. The gaze projection and display was performed with the Analysis, Homography, and Visualisation modules.
+Example visualisations of 30 eye-tracking datasets recorded and analysed with this implementation is presented below for reference. The gaze from 30 wearers--recorded using the GlassesRecord modul--is mapped and projected to a common space, the centerview--recorded using the CentralCam module. Projected gaze from all wearers is presented as a heatmap in the central grid cell with each wearer's egocentric gaze and worldview recording in the surrounding cells. The gaze projection and display was performed with the Analysis, Homography, and Visualisation modules.
 
-<!-- ![SocialEyes example](refs/example.png) -->
-<img src="refs/example.png" alt="SocialEyes example" width="1000">
+<img src="refs/demo-gif.gif" alt="SocialEyes example" width="1000">
+<img src="refs/demo-gif-jet.gif" alt="SocialEyes example" width="1000">
 
 
 ## Citation   
@@ -200,3 +220,7 @@ Commercial use is restricted. Please see the LICENSE file for details.
 This repository includes the SuperGlue software as a submodule.
 SuperGlue is licensed under the "Academic or Non-Profit Organization Noncommercial Research Use Only" license.
 Please refer to the LICENSE file within the SuperGlue submodule for more details on its terms and restrictions.
+
+
+
+[![code with love by ShreshthSaxena](https://img.shields.io/badge/%3C%2F%3E%20with%20%E2%99%A5%20by-ShreshthSaxena-ff1414.svg?style=flat-square)](https://github.com/ShreshthSaxena)
