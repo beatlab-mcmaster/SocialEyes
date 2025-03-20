@@ -2,10 +2,10 @@
 {
     "output_dir": "outputs/",
     "frame_drop_threshold": 600,
-    "show_preview": true,
+    "show_preview": false,
     "camera_input": "standard",
     "standard": {
-        "cam_src": 1, 
+        "cam_src": "rtsp://192.168.25.41:554/1", 
         "write_to_raw": false,
         "fps_calc_window": 180,
         "resolution": {
@@ -14,7 +14,7 @@
         }
     },
     "arducam": {
-        "arducam_config": "arducam_config/xx.cfg",
+        "arducam_config": "arducam_config/Mira220_MIPI_2Lane_1600x1400_12b_30fps.cfg",
         "verbose": 0,
         "scale_width": -1
     }

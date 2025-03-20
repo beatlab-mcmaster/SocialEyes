@@ -226,7 +226,11 @@ if __name__ == "__main__":
         if  cam_type == "standard":
             # Init camera and output directory
             cam_src = config[cam_type]["cam_src"]
-            cam = cv2.VideoCapture(int(cam_src)) 
+            try:
+                cam_src = int(cam_src) # if usb webcam src is selected
+            except:
+                pass
+            cam = cv2.VideoCapture(cam_src) 
 
             # Start the metrics process
             central_metrics_queue = Queue()
