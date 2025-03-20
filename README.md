@@ -109,11 +109,14 @@ To ensure dependencies are properly managed, we recommend creating a separate Py
 
 1. Clone the repository:  
    `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
-   
-2. Build the Docker image:  
+
+2. Navigate to the code directory:  
+   `cd SocialEyes`
+
+3. Build the Docker image:  
    `docker build -t socialeyes-img .`
    
-3. Mount your drive and run the container in privileged mode to allow access to local machine resources (USB/camera/network):
+4. Mount your drive and run the container in privileged mode to allow access to local machine resources (USB/camera/network):
     ```bash
     docker run --rm -it --privileged -v $(pwd):/SocialEyes socialeyes-img
     ```
@@ -222,5 +225,6 @@ SuperGlue is licensed under the "Academic or Non-Profit Organization Noncommerci
 Please refer to the LICENSE file within the SuperGlue submodule for more details on its terms and restrictions.
 
 
+---
 
 [![code with love by ShreshthSaxena](https://img.shields.io/badge/%3C%2F%3E%20with%20%E2%99%A5%20by-ShreshthSaxena-ff1414.svg?style=flat-square)](https://github.com/ShreshthSaxena)

@@ -20,7 +20,7 @@ from config import config
 STREAMING = False
 RECORDING = True
 
-def metrics_process(queue):
+def metrics_process(queue, output_dir):
     """
     Separate process to log timestamps and frame data.
 
@@ -234,7 +234,7 @@ if __name__ == "__main__":
 
             # Start the metrics process
             central_metrics_queue = Queue()
-            metrics_worker = Process(target=metrics_process, args=(central_metrics_queue,))
+            metrics_worker = Process(target=metrics_process, args=(central_metrics_queue, output_dir))
             metrics_worker.daemon = True
             metrics_worker.start()
                 

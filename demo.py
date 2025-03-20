@@ -23,7 +23,8 @@ if __name__ == "__main__":
     action = questionary.select("Please select an action", qmark = ":",
                         choices = ["Collect eye-tracking data (Opens the Terminal User Interface (TUI) to remotely operate eye-tracking devices)",
                                     "Collect central-camera data (Executes the CentralCam module)",
-                                   "Analyse data (Opens the Offline Interface to analyse and visualise collected data)"]).ask()
+                                    "Start UDP Packet Listener",
+                                    "Analyse data (Opens the Offline Interface to analyse and visualise collected data)"]).ask()
     
     #There are three main interfaces for SocialEyes: GlassesRecord TUI, CentralCam and Offline interface for analysis/visualisation. All these interfaces can be demoed through this tool below. 
     if action.startswith("Collect eye-tracking data"):
@@ -38,6 +39,14 @@ if __name__ == "__main__":
         except subprocess.CalledProcessError as e:
             print(f"Error occurred while running the script")
             print("Please make sure that the src/centralCam/config.json file is correctly updated. You can also try executing the main script from src/centralCam")
+        except KeyboardInterrupt:
+            pass
+    elif action.startswith("Start UDP Packet Listener"):
+        try:
+            result = subprocess.run([sys.executable, "main.py"], check=True, cwd="src/udpPacketListener/")
+        except subprocess.CalledProcessError as e:
+            print(f"Error occurred while running the script")
+            print("You can try executing the main.py script directly from src/offlineInterface")
         except KeyboardInterrupt:
             pass
     else:
