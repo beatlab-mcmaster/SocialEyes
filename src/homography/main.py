@@ -58,7 +58,7 @@ class Params:
         self.output_dir = output_dir
 
 
-def init_homography(input_dir, cam_dir, output_dir="./", custom_dir_structure=True, multi_thread=False):
+def init_homography(input_dir, cam_dir, output_dir="./", multi_thread=False, **kargs):
     """
     Initialize homography processing using provided directories and configuration.
 
@@ -66,7 +66,6 @@ def init_homography(input_dir, cam_dir, output_dir="./", custom_dir_structure=Tr
         input_dir (str): Directory containing input files (e.g., video and gaze data).
         cam_dir (str): Directory containing centralview camera files.
         output_dir (str, optional): Directory to store output files. Defaults to "./".
-        custom_dir_structure (bool, optional): Whether to use a custom directory structure for input files. Defaults to True.
         multi_thread (bool, optional): If True, use multithreading for faster processing. Defaults to False.
 
     Returns:
@@ -80,8 +79,10 @@ def init_homography(input_dir, cam_dir, output_dir="./", custom_dir_structure=Tr
     start = time.time()
     
     # Unzip zip from pupil cloud
-    worldview_video_paths, worldview_timestamps_paths, gaze_paths, glasses_names = FileProcessor.parse_glasses_dir(opt.input_dir, custom_dir_structure)
-    
+    glasses_names, worldview_video_paths, stream_csvs  = FileProcessor.parse_glasses_dir(opt.input_dir, **kargs)
+    worldview_timestamps_paths = stream_csvs["world"]
+    gaze_paths = stream_csvs["gaze"]
+
     # Finding paths for central files
     central_video_path, central_timestamps_path = FileProcessor.parse_central_camera_dir(opt.cam_dir)
 
@@ -106,7 +107,7 @@ def init_homography(input_dir, cam_dir, output_dir="./", custom_dir_structure=Tr
             central_video_path,
             central_timestamps_path
         ))
-
+    print(f"Starting homography for {len(homography_instances)} recordings")
 
     if multi_thread:
         concurrent_start = time.time()
@@ -145,20 +146,16 @@ if __name__ == "__main__":
     # Add arguments
     parser.add_argument(
         '--input_dir', type=str, default='./',
-        help='Path to the directory that contains data for glasses in separate dub-directories')
+        help='Path to the directory that contains data for glasses in separate sub-directories')
     parser.add_argument(
         '--cam_dir', type=str, default='./',
-        help='Path to the directory that contains data for central camera recording')
+        help='Path to the directory that contains data for centralcam recording')
     parser.add_argument(
         '--output_dir', type=str, default='./',
-        help='Path to the directory in which the .npz results and optionally,'
-        'the visualization images are written')
-    parser.add_argument(
-        '--custom_dir_structure', type=bool, default=True,
-        help='If data is not downloaded from homography interface and exists in a custom directory structure')
+        help='Path to store results and outputs from the module')
 
     opt = parser.parse_args()
-    init_homography(opt.input_dir, opt.cam_dir, opt.output_dir, opt.custom_dir_structure)
+    init_homography(opt.input_dir, opt.cam_dir, opt.output_dir)
 
 
     

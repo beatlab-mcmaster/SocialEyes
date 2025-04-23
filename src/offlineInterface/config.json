@@ -1,0 +1,19 @@
+{
+    "paths": {
+        "worldview_video_filename" : "Neon Scene Camera v1 ps1.mp4",
+        "worldview_csv_filename" : "world.csv",
+        "gaze_csv_filename" : "gaze.csv",
+        "blinks_csv_filename" : "blinks.csv",
+        "fixations_csv_filename": "fixations.csv",
+        "events_csv_filename": "events.csv",
+        "imu_csv_filename": "imu.csv",
+        "saccades_csv_filename": "saccades.csv",
+        "eye_states_csv_filename": "3d_eye-states.csv",
+        "info_filename": "info.json"
+    },
+    "defaults": {
+        "network_id": "192.168.2",
+        "offset": 100,
+        "device_name_as_ip": false
+    }
+}
