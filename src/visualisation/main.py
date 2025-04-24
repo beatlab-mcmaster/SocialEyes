@@ -33,7 +33,7 @@ except:
     from homography.config import config
 
 
-def viz_homography(input_dir, cam_dir, output_dir="./", custom_dir_structure=True, search_key= ""):
+def viz_homography(input_dir, cam_dir, output_dir="./", **kargs):
     """
     Visualize homography results by rendering videos from glasses and central camera.
 
@@ -41,14 +41,14 @@ def viz_homography(input_dir, cam_dir, output_dir="./", custom_dir_structure=Tru
         input_dir (str): Directory containing input files (worldview video and gaze data).
         cam_dir (str): Directory containing centralview camera files.
         output_dir (str, optional): Directory to save output videos. Defaults to "./".
-        custom_dir_structure (bool, optional): Whether to use a custom directory structure for input files. Defaults to True.
-        search_key (str, optional): Key for filtering specific glasses data. Defaults to "".
 
     Returns:
         None: This function does not return a value, but it creates visualizations of the homography processing.
     """
         
-    worldview_video_paths, worldview_timestamps_paths, gaze_paths, glasses_names = FileProcessor.parse_glasses_dir(input_dir, custom_dir_structure, search_key= search_key)
+    glasses_names, worldview_video_paths, stream_csvs = FileProcessor.parse_glasses_dir(input_dir, **kargs)
+    worldview_timestamps_paths = stream_csvs["world"]
+    gaze_paths = stream_csvs["gaze"]
     central_video_path, central_timestamps_path = FileProcessor.parse_central_camera_dir(cam_dir)
     gaze_tranforms_paths = [os.path.join(output_dir, f'transformed_gaze_{name}.csv') for name in glasses_names]
     colors = sns.color_palette("colorblind", len(glasses_names))
@@ -199,8 +199,8 @@ def frames_generator(viz_instances, res=(640,480), heatmap = False, convexhull=F
         except Exception as e:
             raise e
 
-def viz_homography_grid(input_dir, cam_dir, output_dir="./", custom_dir_structure=True, 
-                        output_res = (2880,960), fourcc = cv2.VideoWriter_fourcc(*'mp4v'), fps=30.0, show_heatmap=False, search_key= "", preempt = None, device_name_from_info=False):
+def viz_homography_grid(input_dir, cam_dir, output_dir="./",
+                        output_res = (2880,960), fourcc = cv2.VideoWriter_fourcc(*'mp4v'), fps=30.0, show_heatmap=False, preempt = None, **kargs):
 
     """
     Visualize homography results in a grid format by rendering videos from glasses and central camera.
@@ -210,12 +210,10 @@ def viz_homography_grid(input_dir, cam_dir, output_dir="./", custom_dir_structur
         input_dir (str): Directory containing input files (e.g., video or gaze data).
         cam_dir (str): Directory containing camera files.
         output_dir (str, optional): Directory to save output videos. Defaults to "./".
-        custom_dir_structure (bool, optional): Whether to use a custom directory structure for input files. Defaults to True.
         output_res (tuple, optional): Resolution (width, height) for the output video grid. Defaults to (2880, 960).
         fourcc (int, optional): FourCC code for the video codec. Defaults to cv2.VideoWriter_fourcc(*'mp4v').
         fps (float, optional): Frames per second for the output video. Defaults to 30.0.
         show_heatmap (bool, optional): If True, generate and display heatmaps instead of gaze points. Defaults to False.
-        search_key (str, optional): Key for filtering specific glasses data. Defaults to "".
         preempt (int or None, optional): Specifies the maximum number of frames to process before preempting; if None, all frames are processed. Defaults to None.
 
     Raises:
@@ -223,7 +221,9 @@ def viz_homography_grid(input_dir, cam_dir, output_dir="./", custom_dir_structur
         Exception: For any other errors that may arise during video processing.
     """
         
-    worldview_video_paths, worldview_timestamps_paths, gaze_paths, glasses_names = FileProcessor.parse_glasses_dir(input_dir, custom_dir_structure, search_key=search_key, device_name_from_info=device_name_from_info)
+    glasses_names, worldview_video_paths, stream_csvs = FileProcessor.parse_glasses_dir(input_dir, **kargs)
+    worldview_timestamps_paths = stream_csvs["world"]
+    gaze_paths = stream_csvs["gaze"]
     central_video_path, central_timestamps_path = FileProcessor.parse_central_camera_dir(cam_dir)
     gaze_tranforms_paths = [os.path.join(output_dir, f'transformed_gaze_{name}.csv') for name in glasses_names]
     colors = sns.color_palette("colorblind", len(glasses_names))
@@ -261,8 +261,8 @@ def viz_homography_grid(input_dir, cam_dir, output_dir="./", custom_dir_structur
         out_central_comb.release()
 
 
-def viz_homography_centralonly(input_dir, cam_dir, output_dir="./", custom_dir_structure=True, 
-                        output_res = (720,480), fourcc = cv2.VideoWriter_fourcc(*'mp4v'), fps=30.0, show_heatmap=False, show_hull = False, search_key= "", preempt = None, device_name_from_info=False):
+def viz_homography_centralonly(input_dir, cam_dir, output_dir="./",
+                        fourcc = cv2.VideoWriter_fourcc(*'mp4v'), fps=30.0, show_heatmap=False, show_hull = False,preempt = None, **kargs):
 
     """
     Visualize homography transformed gaze of all viewers on the shared centralcam view. (No independent views are visualised)
@@ -271,12 +271,9 @@ def viz_homography_centralonly(input_dir, cam_dir, output_dir="./", custom_dir_s
         input_dir (str): Directory containing input files (e.g., video or gaze data).
         cam_dir (str): Directory containing camera files.
         output_dir (str, optional): Directory to save output videos. Defaults to "./".
-        custom_dir_structure (bool, optional): Whether to use a custom directory structure for input files. Defaults to True.
-        output_res (tuple, optional): Resolution (width, height) for the output video grid. Defaults to (2880, 960).
         fourcc (int, optional): FourCC code for the video codec. Defaults to cv2.VideoWriter_fourcc(*'mp4v').
         fps (float, optional): Frames per second for the output video. Defaults to 30.0.
         show_heatmap (bool, optional): If True, generate and display heatmaps instead of gaze points. Defaults to False.
-        search_key (str, optional): Key for filtering specific glasses data. Defaults to "".
         preempt (int or None, optional): Specifies the maximum number of frames to process before preempting; if None, all frames are processed. Defaults to None.
 
     Raises:
@@ -284,7 +281,9 @@ def viz_homography_centralonly(input_dir, cam_dir, output_dir="./", custom_dir_s
         Exception: For any other errors that may arise during video processing.
     """
         
-    worldview_video_paths, worldview_timestamps_paths, gaze_paths, glasses_names = FileProcessor.parse,_glasses_dir(input_dir, custom_dir_structure, search_key=search_key, device_name_from_info = device_name_from_info)
+    glasses_names, worldview_video_paths, stream_csvs = FileProcessor.parse_glasses_dir(input_dir, **kargs)
+    worldview_timestamps_paths = stream_csvs["world"]
+    gaze_paths = stream_csvs["gaze"]
     central_video_path, central_timestamps_path = FileProcessor.parse_central_camera_dir(cam_dir)
     gaze_tranforms_paths = [os.path.join(output_dir, f'transformed_gaze_{name}.csv') for name in glasses_names]
     colors = sns.color_palette("colorblind", len(glasses_names))
@@ -340,9 +339,6 @@ if __name__ == "__main__":
         '--output_dir', type=str, default='./',
         help='Path to the directory in which the .npz results and optionally,'
         'the visualization images are written')
-    parser.add_argument(
-        '--custom_dir_structure', type=bool, default=True,
-        help='If data is not downloaded from homography interface and exists in a custom directory structure')
 
     opt = parser.parse_args()
-    viz_homography(opt.input_dir, opt.cam_dir, opt.output_dir, opt.custom_dir_structure)
+    viz_homography(opt.input_dir, opt.cam_dir, opt.output_dir)

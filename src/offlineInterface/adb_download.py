@@ -1,4 +1,9 @@
-##TODOs: add docstrings, improve suprocess spawn and exit, tqdm for loading?
+"""
+csv_processor.py
+
+Author: Alexander Nguyen, Shreshth Saxena
+Purpose: Download files from Companion android devices using ADB.
+"""
 
 import subprocess
 import os

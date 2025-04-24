@@ -39,6 +39,9 @@ class Session:
         The class initializes with a root_dir where all recordings are expected to be found.
         """
         self.root_dir = root_dir
+        self.cam_dir = None
+        self.hom_op_dir = None
+        self.offset_corrected = None
         self.device_names = []
         self.device_ips = []
         self.worldview_vids = []
@@ -56,6 +59,12 @@ class Session:
         for k,v in self.stream_csvs.items():
             questionary.print(f"Found {len(v)} {k} csv files")
     
+    def set_cam_dir(self):
+        self.cam_dir = questionary.path("Input path of the CentralCam recording dir.").ask()
+    
+    def set_hom_op_dir(self):
+        self.hom_op_dir = questionary.path("Select path for homography results (transformed gaze in CentralCam coordinates)").ask()
+        os.makedirs(self.hom_op_dir, exist_ok=True)
 
 if __name__ == "__main__":
 
@@ -210,13 +219,13 @@ if __name__ == "__main__":
             else:
                 search_key = ""
 
-            #get central camera files
-            cam_dir = questionary.path("Input path of the CentralCam recording dir.").ask()
-
-            output_dir = questionary.path("Select path to dump homography results (transformed gaze in CentralCam coordinates)").ask()
-            os.makedirs(output_dir, exist_ok=True)
+            #set camera and results dir if not already done
+            if session.cam_dir == None:
+                session.set_cam_dir()
+            if session.hom_op_dir == None:
+                session.set_hom_op_dir()
             
-            init_homography(session.root_dir, cam_dir, output_dir=output_dir, multi_thread=True, search_key = search_key, offset_corrected = offset_corrected)
+            init_homography(session.root_dir, session.cam_dir, output_dir=session.hom_op_dir, multi_thread=True, search_key = search_key, offset_corrected = offset_corrected)
             
         elif action == "Visualize Homography Results":
             action = questionary.select("Please select a visualisation mode from below",
@@ -226,25 +235,30 @@ if __name__ == "__main__":
                                     "4. Multi-person transformed gaze on centralview",
                                     "5. Multi-person egocentric views with transformed gaze on centralview"]).ask()
             
-            cam_dir = questionary.path("Select path of the central camera recording dir.").ask()
-            output_dir = questionary.path("Select dir that contains homography results (transformed gaze in central cam. coordinates)").ask()
-            if questionary.confirm("Would you like to add a search key for filtering files?").ask():
+            #set camera and results dir if not already done
+            if session.cam_dir == None:
+                session.set_cam_dir()
+            if session.hom_op_dir == None:
+                session.set_hom_op_dir()
+
+            offset_corrected = True #Vis only uses offset_corrected timestamps              
+            if questionary.confirm("Would you like to add a search key for filtering glasses file paths?").ask():
                 search_key = questionary.text("Enter search key: ").ask()
             else:
                 search_key = ""
 
             if action.startswith("1."):
-                viz_homography(session.root_dir, cam_dir, output_dir, custom_dir_structure=True, search_key=search_key)
+                viz_homography(session.root_dir, session.cam_dir, session.hom_op_dir, search_key=search_key, offset_corrected= offset_corrected)
 
             elif action.startswith("4."):
                 action_overlay = questionary.select("Select one of the visualisation overlays",
                         choices = [ "Heatmap", "Convex Hull", "Gaze points"]).ask()
                 if action_overlay == "Heatmap":
-                    viz_homography_centralonly(session.root_dir, cam_dir, output_dir, custom_dir_structure=True, show_heatmap=True, search_key=search_key)
+                    viz_homography_centralonly(session.root_dir, session.cam_dir, session.hom_op_dir, show_heatmap=True, search_key=search_key, offset_corrected = offset_corrected)
                 elif action_overlay == "Convex Hull":
-                    viz_homography_centralonly(session.root_dir, cam_dir, output_dir, custom_dir_structure=True, show_hull=True, search_key=search_key)
+                    viz_homography_centralonly(session.root_dir, session.cam_dir, session.hom_op_dir, show_hull=True, search_key=search_key, offset_corrected= offset_corrected)
                 else:
-                    viz_homography_centralonly(session.root_dir, cam_dir, output_dir, custom_dir_structure=True, search_key=search_key)
+                    viz_homography_centralonly(session.root_dir, session.cam_dir, session.hom_op_dir, search_key=search_key, offset_corrected= offset_corrected)
 
             elif action.startswith("5."):
                 
@@ -260,9 +274,9 @@ if __name__ == "__main__":
                             pass
 
                 if questionary.confirm("Press y to show heatmap or n to show raw gaze points on centralview").ask():
-                    viz_homography_grid(session.root_dir, cam_dir, output_dir, custom_dir_structure=True, show_heatmap=True, search_key=search_key, preempt=preempt, device_name_from_info=True)
+                    viz_homography_grid(session.root_dir, session.cam_dir, session.hom_op_dir, show_heatmap=True, search_key=search_key, preempt=preempt, offset_corrected= offset_corrected)
                 else:
-                    viz_homography_grid(session.root_dir, cam_dir, output_dir, custom_dir_structure=True, search_key=search_key, device_name_from_info=True)
+                    viz_homography_grid(session.root_dir, session.cam_dir, session.hom_op_dir, search_key=search_key, preempt=preempt, offset_corrected= offset_corrected)
         
         elif action == "Exit Interface":
             if questionary.confirm("Are you sure you want to exit?"):

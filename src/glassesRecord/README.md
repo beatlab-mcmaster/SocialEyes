@@ -26,7 +26,7 @@ To summarize the important steps:
             adb tcpip 5555
             adb connect <device_ip>:5555
             ```
-        Replace <device_ip> with the IP address of your device. You can find the device's IP address in the device's Wi-Fi settings or by running:
+        Replace <device_ip> with the IP address of your device. You can find the device's IP address in the device's Wi-Fi settings.
     - Disconnect the device and verify the connection by running:
             ```
             adb devices

@@ -1,6 +1,0 @@
-{
-    "host": "0.0.0.0",
-    "port": 9005,  
-    "osc": true,
-    "csv_filename": "udp_listener"
-}

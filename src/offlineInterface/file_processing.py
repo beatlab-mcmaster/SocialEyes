@@ -89,7 +89,7 @@ class FileProcessor:
         return None
 
     @staticmethod
-    def parse_glasses_dir(input_path, offset_corrected = False, search_key="", device_name_from_info = False):
+    def parse_glasses_dir(input_path, offset_corrected = True, search_key="", device_name_from_info = False):
         """
         Parses a directory to find recordings and relevant data files.
 
