@@ -1,0 +1,64 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: SocialEyes
+message: a framework for scalable multi-person eye tracking
+type: software
+authors:
+  - given-names: Shreshth
+    family-names: Saxena
+    email: saxens17@mcmaster.ca
+    orcid: 'https://orcid.org/0000-0002-9237-5461'
+  - given-names: 'Areez '
+    family-names: Visram
+  - given-names: Neil
+    family-names: Lobo
+  - given-names: Zahid
+    family-names: Mirza
+  - given-names: Mehak
+    family-names: Khan
+  - given-names: Biranugan
+    family-names: Pirabaharan
+  - given-names: Alexander
+    family-names: Nguyen
+  - given-names: Lauren
+    family-names: Fink
+    email: finkl1@mcmaster.ca
+    orcid: 'https://orcid.org/0000-0001-6699-750X'
+repository-code: 'https://github.com/beatlab-mcmaster/SocialEyes'
+repository: 'https://doi.org/10.1145/3706598.3713910'
+abstract: >-
+  Eye movements provide a window into human behaviour,
+  attention, and interaction dynamics. Challenges in
+  real-world, multi-person environments have, however,
+  restrained eye-tracking research predominantly to
+  single-person, in-lab settings. We developed a system to
+  stream, record, and analyse synchronised data from
+  multiple mobile eye-tracking devices during collective
+  viewing experiences (e.g., concerts, films, lectures). We
+  implemented lightweight operator interfaces for
+  real-time-monitoring, remote-troubleshooting, and
+  gaze-projection from individual egocentric perspectives to
+  a common coordinate space for shared gaze analysis. We
+  tested the system in a live concert and a film screening
+  with 30 simultaneous viewers during each of two public
+  events (N=60). We observe precise time-synchronisation
+  between devices measured through recorded clock-offsets,
+  and accurate gaze-projection in challenging dynamic
+  scenes. Our novel analysis metrics and visualizations
+  illustrate the potential of collective eye-tracking data
+  for understanding collaborative behaviour and social
+  interaction. This advancement promotes ecological validity
+  in eye-tracking research and paves the way for innovative
+  interactive tools.
+keywords:
+  - eye tracking
+  - eye-tracking
+  - multi-person
+  - perspective transform
+  - homography
+  - gaze
+  - mapping
+  - social
+  - eyes
