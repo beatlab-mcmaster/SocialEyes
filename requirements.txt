@@ -19,3 +19,5 @@ numpy>=1.18.1
 pandas
 seaborn
 st_dbscan
+
+-e git+https://github.com/pupil-labs/pl-rec-export.git#egg=pl-rec-export
