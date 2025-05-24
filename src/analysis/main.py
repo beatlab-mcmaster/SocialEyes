@@ -16,7 +16,7 @@ from scipy.spatial import distance, ConvexHull
 from st_dbscan import ST_DBSCAN 
 
 def add_condition_cols(df, path, re_ip = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', re_cond = r'day(.)_(.*?)/'):
-    """
+    r"""
     Extracts information from a path and adds columns to a DataFrame based on extracted values.
 
     Parameters:

@@ -10,6 +10,8 @@ import zipfile
 import json
 import re 
 from tqdm import tqdm
+import datetime
+import shutil
 
 try:
     from offlineInterface.csv_processor import CSVProcessor
@@ -119,7 +121,7 @@ class FileProcessor:
                 ('gaze', 'world', 'fixations', 'blinks', 'events', 'imu', 'saccades', '3d_eye_states')
                 to lists of corresponding file paths.
         """
-        glasses_names, worldview_vids = [], []
+        glasses_names, worldview_vids, rec_paths = [], [], []
         stream_csvs = {"gaze": [], "world": [], "fixations": [], "blinks": [], "events": [], "imu": [], "saccades": [], "3d_eye_states": []}
         pre = "ts_corr_" if offset_corrected else ""
 
@@ -130,6 +132,7 @@ class FileProcessor:
             try:
                 if os.path.isdir(p) and uid_pattern.fullmatch(os.path.basename(p)) and not os.path.basename(p).startswith("b5b4"): #rejecting workspace dirs which are also named as UIDs
                     name = None
+                    rec_paths.append(p)
                     for file_ in glob.glob(os.path.join(p, "**"), recursive=True):
                         if (not os.path.isfile(file_)) or (search_key not in file_):
                             continue
@@ -162,7 +165,7 @@ class FileProcessor:
                 print(e)
                 continue
                 
-        return glasses_names, worldview_vids, stream_csvs
+        return glasses_names, worldview_vids, stream_csvs, rec_paths
 
     @staticmethod
     def parse_central_camera_dir(input_path, 
@@ -219,3 +222,75 @@ class FileProcessor:
             csv_file.write_csv()
             csv_file_paths.append(csv_file_path)
         return csv_file_paths
+
+    @staticmethod
+    def check_date(path, year, month, date, tz = 'Canada/Eastern'):
+        """
+        Checks whether the start time in a Neon recording's info.json file matches the given date in a specified timezone.
+
+        Args:
+            path (str): Path to the JSON file for a Neon Companion recording. The file must have a "start_time" field.
+            year (int): Year to compare against.
+            month (int): Month to compare against.
+            date (int): Day to compare against.
+            tz (str, optional): Timezone to convert the start time to. Defaults to 'Canada/Eastern'.
+
+        Returns:
+            bool: True if the start time matches the specified date in the given timezone, False otherwise.
+        """
+        with open(path) as f:
+            d = json.load(f)
+            utc_time = datetime.fromtimestamp(d["start_time"]/1000000000, tz=timezone.utc)
+            toronto_time = utc_time.astimezone(pytz.timezone(tz))
+            return toronto_time.date() == datetime(year, month, date).date()
+
+    @staticmethod
+    def confirm_and_delete(path, confirm_over_mbs = 10):
+        """
+        Prints the size of the file or directory at the given path and prompts the user for confirmation before deletion.
+    
+        Args:
+            path (str): The path to the file or directory to be deleted.
+    
+        Returns:
+            bool: True if the file/directory was deleted, False otherwise.
+        """
+        if not os.path.exists(path):
+            print(f"Path does not exist: {path}")
+            return False
+    
+        if os.path.isfile(path):
+            size_bytes = os.path.getsize(path)
+        elif os.path.isdir(path):
+            size_bytes = sum(
+                os.path.getsize(os.path.join(dirpath, filename))
+                for dirpath, _, filenames in os.walk(path)
+                for filename in filenames
+            )
+        else:
+            print(f"Unsupported file type: {path}")
+            return False
+    
+        size_mb = size_bytes / (1024 ** 2) #readable size
+    
+        # Prompt for confirmation
+        if size_mb <= confirm_over_mbs:
+            confirm = 'y'
+        else:
+            print(f"Size of '{path}': {size_mb:.2f} MB")
+            confirm = input("Press y to confirm deletion? [y/N]: ").strip().lower()
+        
+        if confirm in ['y', 'yes']:
+            if os.path.isfile(path):
+                os.remove(path)
+            else:
+                shutil.rmtree(path)
+            # print(f"Deleted: {path}")
+            return True
+        else:
+            print("Deletion cancelled.")
+            return False
+        
+
+
+    

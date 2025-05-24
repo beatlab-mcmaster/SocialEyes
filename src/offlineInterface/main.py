@@ -46,13 +46,15 @@ class Session:
         self.device_ips = []
         self.worldview_vids = []
         self.stream_csvs = {}
+        self.rec_paths = []
+        self.confirm_all = False
 
     def validate_root_dir(self):
         """
         Validates and parses the root directory to locate relevant Neon glasses data.
         """
         questionary.print("Finding worldview and gaze data...", style="bold fg:ansiblue")
-        self.device_names, self.worldview_vids, self.stream_csvs = FileProcessor.parse_glasses_dir(self.root_dir)
+        self.device_names, self.worldview_vids, self.stream_csvs, self.rec_paths = FileProcessor.parse_glasses_dir(self.root_dir)
         
         questionary.print(f"Found {len(self.device_names)} device recordings")
         questionary.print(f"Found {len(self.worldview_vids)} worldview videos")
@@ -71,7 +73,7 @@ if __name__ == "__main__":
     questionary.print("Welcome to the SocialEyes offline analysis interface.", style="bold fg:darkred")
     questionary.print("The interface links to some of the functionalities of homography, analysis, and visualisations modules for easy access. For a complete list of actions, check the respective module", style="bold fg:darkred")
     
-    root_dir = questionary.path("Select root dir for data").ask()
+    root_dir = questionary.path("Select root dir for Neon glasses data").ask()
     session = Session(root_dir)
     
     download_src = questionary.select('''If you already have the gaze and worldview data available locally, you can select the first option. \n If not, please select how would you like to fetch the data?''',
@@ -166,11 +168,38 @@ if __name__ == "__main__":
     while True:
         #Select action to perform through the console
         action = questionary.select("What action would you like to perform ?",
-                        choices = [ "Perform Offset Correction",
+                        choices = [ "Weed out unnecessary recording directories",
+                                    "Extract data from raw Neon recordings",
+                                    "Perform Offset Correction",
                                     "Perform Homography",
                                     "Visualize Homography Results",
                                     "Exit Interface"]).ask()
 
+        if action == "Weed out unnecessary recording directories":
+            do_datecheck = questionary.confirm("Would you like to include recordings only from a specific date?").ask()
+            if do_datecheck:
+                year = questionary.text("Input year: ").ask()
+                month = questionary.text("Input month: ").ask()
+                date = questionary.text("Input date: ").ask()
+                
+            for rec in tqdm(session.rec_paths, position=0, leave=True):            
+                    if do_datecheck and ("info.json" in os.listdir(rec)):
+                        try:
+                            if FileProcessor.check_date(os.path.join(rec, "info.json"), year, month, date):
+                                FileProcessor.confirm_and_delete(rec)
+                                continue
+                        except Exception as e:
+                            sys.exit(e)
+                    
+                    if "Neon Scene Camera v1 ps1.mp4" not in os.listdir(rec):
+                        FileProcessor.confirm_and_delete(rec)
+            # Update root_dir counts
+            session.validate_root_dir()
+
+        if action == "Extract data from raw Neon recordings":
+            for rec in tqdm(session.rec_paths, position=0, leave=True):
+                subprocess.run(["pl-rec-export", rec])
+        
         if action == "Perform Offset Correction":
             
             use_ransac = questionary.confirm("Use RANSAC (recommended for longer recordings)?").ask()
@@ -280,7 +309,8 @@ if __name__ == "__main__":
         
         elif action == "Exit Interface":
             if questionary.confirm("Are you sure you want to exit?"):
-                sys.exit("offline_interface aborted")
+                print("Exiting offline interface")
+                sys.exit(0)
 
         
         
