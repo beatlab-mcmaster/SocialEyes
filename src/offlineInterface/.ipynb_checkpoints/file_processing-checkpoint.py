@@ -134,7 +134,6 @@ class FileProcessor:
                     name = None
                     rec_paths.append(p)
                     for file_ in glob.glob(os.path.join(p, "**"), recursive=True):
-                        #check extension and search phrase
                         if (not os.path.isfile(file_)) or (search_key not in file_):
                             continue
                         elif os.path.basename(file_) == config["paths"]["worldview_video_filename"]:

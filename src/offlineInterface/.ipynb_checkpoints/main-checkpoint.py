@@ -54,7 +54,7 @@ class Session:
         Validates and parses the root directory to locate relevant Neon glasses data.
         """
         questionary.print("Finding worldview and gaze data...", style="bold fg:ansiblue")
-        self.device_names, self.worldview_vids, self.stream_csvs, self.rec_paths = FileProcessor.parse_glasses_dir(self.root_dir, offset_corrected=False)
+        self.device_names, self.worldview_vids, self.stream_csvs, self.rec_paths = FileProcessor.parse_glasses_dir(self.root_dir)
         
         questionary.print(f"Found {len(self.device_names)} device recordings")
         questionary.print(f"Found {len(self.worldview_vids)} worldview videos")
