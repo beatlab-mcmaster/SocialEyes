@@ -166,9 +166,6 @@ def frames_generator(viz_instances, res=(640,480), heatmap = False, convexhull=F
             x_pts, y_pts = [pt[0] for pt in gaze_pts_c.values()], [pt[1] for pt in gaze_pts_c.values()] 
             valid_pts = np.column_stack((x_pts, y_pts))
 
-            # import pdb
-            # pdb.set_trace()
-
             if heatmap:
                 pred_heatmap = generate_heatmap(x_pts, y_pts, res=(640, 480), sigma=20)
                 pred_heatmap = plot_heatmap(pred_heatmap, colormap = cv2.COLORMAP_VIRIDIS)
