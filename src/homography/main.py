@@ -79,7 +79,7 @@ def init_homography(input_dir, cam_dir, output_dir="./", multi_thread=False, **k
     start = time.time()
     
     # Unzip zip from pupil cloud
-    glasses_names, worldview_video_paths, stream_csvs  = FileProcessor.parse_glasses_dir(opt.input_dir, **kargs)
+    glasses_names, worldview_video_paths, stream_csvs, _  = FileProcessor.parse_glasses_dir(opt.input_dir, **kargs)
     worldview_timestamps_paths = stream_csvs["world"]
     gaze_paths = stream_csvs["gaze"]
 

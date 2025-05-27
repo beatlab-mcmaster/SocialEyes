@@ -228,7 +228,7 @@ if __name__ == "__main__":
                         if dname == None:
                             print("Skipping, cannot convert to device name: ", file_path)
                             continue
-
+                        
                         adjuster = TimeOffsetAdjuster(dname, offsets_path)
                         if use_ransac:
                             adjuster.adjust_files_ransac([file_path], disable = True) #Disabling tqdm bar since we already add one above 

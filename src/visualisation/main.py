@@ -46,7 +46,7 @@ def viz_homography(input_dir, cam_dir, output_dir="./", **kargs):
         None: This function does not return a value, but it creates visualizations of the homography processing.
     """
         
-    glasses_names, worldview_video_paths, stream_csvs = FileProcessor.parse_glasses_dir(input_dir, **kargs)
+    glasses_names, worldview_video_paths, stream_csvs, _ = FileProcessor.parse_glasses_dir(input_dir, **kargs)
     worldview_timestamps_paths = stream_csvs["world"]
     gaze_paths = stream_csvs["gaze"]
     central_video_path, central_timestamps_path = FileProcessor.parse_central_camera_dir(cam_dir)
@@ -218,7 +218,7 @@ def viz_homography_grid(input_dir, cam_dir, output_dir="./",
         Exception: For any other errors that may arise during video processing.
     """
         
-    glasses_names, worldview_video_paths, stream_csvs = FileProcessor.parse_glasses_dir(input_dir, **kargs)
+    glasses_names, worldview_video_paths, stream_csvs, _ = FileProcessor.parse_glasses_dir(input_dir, **kargs)
     worldview_timestamps_paths = stream_csvs["world"]
     gaze_paths = stream_csvs["gaze"]
     central_video_path, central_timestamps_path = FileProcessor.parse_central_camera_dir(cam_dir)
@@ -278,7 +278,7 @@ def viz_homography_centralonly(input_dir, cam_dir, output_dir="./",
         Exception: For any other errors that may arise during video processing.
     """
         
-    glasses_names, worldview_video_paths, stream_csvs = FileProcessor.parse_glasses_dir(input_dir, **kargs)
+    glasses_names, worldview_video_paths, stream_csvs, _ = FileProcessor.parse_glasses_dir(input_dir, **kargs)
     worldview_timestamps_paths = stream_csvs["world"]
     gaze_paths = stream_csvs["gaze"]
     central_video_path, central_timestamps_path = FileProcessor.parse_central_camera_dir(cam_dir)
