@@ -295,8 +295,7 @@ TSWLatexianTemp*
 .vscode
 
 src/**/__pycache__/
-src/**/.ipynp_checkpoints
-src/**/env/
-src/**/env/
-src/**/__pycache__/
+.ipynb_checkpoints/
+env/
+__pycache__/
 src/udpPacketListener/

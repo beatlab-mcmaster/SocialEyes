@@ -49,7 +49,8 @@ class HomographyVisualizer:
         self.world_timestamps_df = CSVProcessor(self.glasses_timestamp_path, oftype, ['timestamp_corrected']).read_csv()
         self.central_timestamps_df = CSVProcessor(self.central_timestamp_path, oftype, ["timestamp_corrected", "frame_count"]).read_csv()
         self.gaze_df = CSVProcessor(self.gaze_path, oftype, 
-                                    ['timestamp_corrected', 'gaze x [px]', 'gaze y [px]']).read_csv()
+                                ['timestamp_corrected', 'gaze x [px]', 'gaze y [px]', 'fixation id', 'blink id']).read_csv()
+        
         # Sync world and gaze timestamps.
         gaze_and_world_df = pd.merge_asof(
                 self.world_timestamps_df.sort_values("timestamp_corrected") ,
@@ -75,6 +76,7 @@ class HomographyVisualizer:
                 direction="nearest",
                 suffixes=["", "transformed"],
         )
+        # self.merged_df.to_csv(os.path.join(os.path.dirname(self.transformed_path), f"test_merged_{self.device_name}.csv"))
 
     def _init_video_streamers(self):
         """

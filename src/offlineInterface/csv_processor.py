@@ -35,8 +35,15 @@ class CSVProcessor:
         Returns:
             pandas.DataFrame: The data read from the CSV file.
         """
+        # try:
         data = pd.read_csv(self.file_path, dtype=self.dtype,
-                           usecols=self.usecols)
+                        usecols=self.usecols)
+        # except ValueError as e:
+        #     data = pd.read_csv(self.file_path)
+        #     if self.dtype:
+        #         # print(e, "\n converting columns with .astype() instead")
+        #         for col, dt in self.dtype.items():
+        #             data[col] = data[col].astype(dt)
         return data
     
     def write_csv(self):
