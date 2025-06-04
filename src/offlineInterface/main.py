@@ -248,13 +248,17 @@ if __name__ == "__main__":
             else:
                 search_key = ""
 
+            multi_thread = False
+            if questionary.confirm("Enable multi-threading for concurrent processing? (Disable if you're not sure about available compute resources)").ask():
+                multi_thread = True
+
             #set camera and results dir if not already done
             if session.cam_dir == None:
                 session.set_cam_dir()
             if session.hom_op_dir == None:
                 session.set_hom_op_dir()
             
-            init_homography(session.root_dir, session.cam_dir, output_dir=session.hom_op_dir, multi_thread=True, search_key = search_key, offset_corrected = offset_corrected)
+            init_homography(session.root_dir, session.cam_dir, output_dir=session.hom_op_dir, multi_thread=multi_thread, search_key = search_key, offset_corrected = offset_corrected)
             
         elif action == "Visualize Homography Results":
             action = questionary.select("Please select a visualisation mode from below",

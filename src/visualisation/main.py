@@ -22,7 +22,7 @@ try:
     from visualisation.homography_visualiser import HomographyVisualizer
     from offlineInterface.file_processing import FileProcessor
     from analysis.main import generate_heatmap, plot_heatmap
-    from homography.config import config
+    from visualisation.config import config
 except:
     #resolve relative paths when executing independently    
     import sys
@@ -30,8 +30,7 @@ except:
     from visualisation.homography_visualiser import HomographyVisualizer
     from analysis.main import generate_heatmap, plot_heatmap
     from offlineInterface.file_processing import FileProcessor
-    from homography.config import config
-
+    from visualisation.config import config
 
 def viz_homography(input_dir, cam_dir, output_dir="./", **kargs):
     """
@@ -130,13 +129,13 @@ def create_grid(images_g, image_c, grid_res,
                     image_index += 1
     return canvas
 
-def frames_generator(viz_instances, res=(640,480), heatmap = False, convexhull=False, **kargs):
+def frames_generator(viz_instances, res, heatmap = False, convexhull=False, **kargs):
     """
     Generate frames for visualization from multiple instances.
 
     Args:
         viz_instances (list): List of HomographyVisualizer instances.
-        res (tuple, optional): Resolution for the output images. Defaults to (640, 480).
+        res (tuple, optional): Resolution for the output images. 
         heatmap (bool, optional): Flag to indicate if heatmaps should be generated. Defaults to False.
         **kargs: Additional keyword arguments for the sync_generator method.
 
@@ -167,22 +166,25 @@ def frames_generator(viz_instances, res=(640,480), heatmap = False, convexhull=F
             valid_pts = np.column_stack((x_pts, y_pts))
 
             if heatmap:
-                pred_heatmap = generate_heatmap(x_pts, y_pts, res=(640, 480), sigma=20)
-                pred_heatmap = plot_heatmap(pred_heatmap, colormap = cv2.COLORMAP_VIRIDIS)
-                # Create overlay
-                image_c_comb = cv2.addWeighted(image_c_raw, 0.7, pred_heatmap, 0.3, 0)
+                params = config["heatmap"]
+                colormap = getattr(cv2, params["colormap"], cv2.COLORMAP_VIRIDIS)
+                pred_heatmap = generate_heatmap(x_pts, y_pts, res=params["resolution"], sigma=params["sigma"])
+                pred_heatmap = plot_heatmap(pred_heatmap, colormap = colormap)
+                # Add overlay
+                image_c_comb = cv2.addWeighted(image_c_raw, 1-params["overlay_alpha"], pred_heatmap, params["overlay_alpha"], 0)
 
             elif convexhull and valid_pts.size != 0:
+                params = config["convexhull"]
                 # hull = ConvexHull(valid_pts)
                 # vertices = valid_pts[hull.vertices].astype(np.int32) 
 
                 #Use plt to draw hull and errorbars
-                fig, ax = plt.subplots(figsize=(image_c_raw.shape[1] / 100, image_c_raw.shape[0] / 100), dpi=100)
+                fig, ax = plt.subplots(figsize=(image_c_raw.shape[1] / params["dpi"], image_c_raw.shape[0] / params["dpi"]), dpi=params["dpi"])
                 ax.imshow(cv2.cvtColor(image_c_raw, cv2.COLOR_BGR2RGB))  
                 # vertices = np.append(hull.vertices, hull.vertices[0])
                 # plt.plot(valid_pts[vertices, 0], valid_pts[vertices, 1], 'r--', lw=2, label='Convex Hull')  # Plot the convex hull
-                plt.errorbar(np.mean(x_pts), np.mean(y_pts), xerr=np.std(x_pts), yerr=np.std(y_pts), fmt='o', markersize=8, capsize=5, label='Mean Point with Error Bars', color = "white")
-                plt.legend(loc='upper right', framealpha=0.7)
+                plt.errorbar(np.mean(x_pts), np.mean(y_pts), xerr=np.std(x_pts), yerr=np.std(y_pts), fmt=params["marker"], markersize=params["markersize"], capsize=params["capsize"], label=params["fig_label"], color = params["color"])
+                # plt.legend(loc='upper right', framealpha=0.7)
                 ax.axis('off'); ax.set_aspect('auto')
                 plt.tight_layout(pad=0)
 
@@ -197,7 +199,7 @@ def frames_generator(viz_instances, res=(640,480), heatmap = False, convexhull=F
             raise e
 
 def viz_homography_grid(input_dir, cam_dir, output_dir="./",
-                        output_res = (2880,960), fourcc = cv2.VideoWriter_fourcc(*'mp4v'), fps=30.0, show_heatmap=False, preempt = None, **kargs):
+                        show_heatmap=False, preempt = None, **kargs):
 
     """
     Visualize homography results in a grid format by rendering videos from glasses and central camera.
@@ -217,7 +219,11 @@ def viz_homography_grid(input_dir, cam_dir, output_dir="./",
         FileNotFoundError: If the input or camera directory does not contain the expected files.
         Exception: For any other errors that may arise during video processing.
     """
-        
+    #Read config for video params    
+    fourcc = cv2.VideoWriter_fourcc(*config["video"]["codec"])
+    fps = config["video"]["fps"]
+    output_res = config["video"]["grid_res"]
+
     glasses_names, worldview_video_paths, stream_csvs, _ = FileProcessor.parse_glasses_dir(input_dir, **kargs)
     worldview_timestamps_paths = stream_csvs["world"]
     gaze_paths = stream_csvs["gaze"]
@@ -242,11 +248,10 @@ def viz_homography_grid(input_dir, cam_dir, output_dir="./",
 
     out = cv2.VideoWriter(os.path.join(output_dir, f"viz_homography_grid{'_heatmap' if show_heatmap else '_gaze_pts'}.mp4"), fourcc, fps, output_res)
     out_central_comb = cv2.VideoWriter(os.path.join(output_dir, f"viz_homography_central_comb{'_heatmap' if show_heatmap else '_gaze_pts'}.mp4"), fourcc, fps, 
-                          (config['homography']['resize'][0],config['homography']['resize'][1]))
+                          (config['homography']['resize'][0], config['homography']['resize'][1]))
     try:
         i=0
-        for images_g, image_c_comb in tqdm(frames_generator(viz_instances, res=config['homography']['resize'], heatmap=show_heatmap,
-                                                            outer_circle_radius=16, line_length=30, font_thickness=2)):
+        for images_g, image_c_comb in tqdm(frames_generator(viz_instances, res=config['homography']['resize'], heatmap=show_heatmap, **config["gaze"])):
             out.write(create_grid(images_g, image_c_comb, output_res))
             out_central_comb.write(image_c_comb)
             i+=1
@@ -259,7 +264,7 @@ def viz_homography_grid(input_dir, cam_dir, output_dir="./",
 
 
 def viz_homography_centralonly(input_dir, cam_dir, output_dir="./",
-                        fourcc = cv2.VideoWriter_fourcc(*'mp4v'), fps=30.0, show_heatmap=False, show_hull = False,preempt = None, **kargs):
+                        show_heatmap=False, show_hull = False,preempt = None, **kargs):
 
     """
     Visualize homography transformed gaze of all viewers on the shared centralcam view. (No independent views are visualised)
@@ -277,7 +282,10 @@ def viz_homography_centralonly(input_dir, cam_dir, output_dir="./",
         FileNotFoundError: If the input or camera directory does not contain the expected files.
         Exception: For any other errors that may arise during video processing.
     """
-        
+    #Read config for video params    
+    fourcc = cv2.VideoWriter_fourcc(*config["video"]["codec"])
+    fps = config["video"]["fps"]
+
     glasses_names, worldview_video_paths, stream_csvs, _ = FileProcessor.parse_glasses_dir(input_dir, **kargs)
     worldview_timestamps_paths = stream_csvs["world"]
     gaze_paths = stream_csvs["gaze"]
@@ -308,8 +316,7 @@ def viz_homography_centralonly(input_dir, cam_dir, output_dir="./",
                           (config['homography']['resize'][0],config['homography']['resize'][1]))
     try:
         i=0
-        for _, image_c_comb in tqdm(frames_generator(viz_instances, res=config['homography']['resize'], heatmap=show_heatmap, convexhull=show_hull,
-                                                            outer_circle_radius=16, line_length=30, font_thickness=2)):
+        for _, image_c_comb in tqdm(frames_generator(viz_instances, res=config['heatmap']['resolution'], heatmap=show_heatmap, convexhull=show_hull, **config["gaze"])):
             out_central_comb.write(image_c_comb)
             i+=1
             if preempt is not None and i >= preempt:

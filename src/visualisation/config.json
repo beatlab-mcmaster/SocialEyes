@@ -1,0 +1,37 @@
+{
+    "heatmap":{
+        "resolution": [640,480],
+        "sigma": 20,
+        "colormap": "COLORMAP_JET",
+        "overlay_alpha":  0.3
+    },
+    "convexhull":{
+        "dpi": 100,
+        "marker": "o",
+        "markersize": 8,
+        "capsize": 5,
+        "fig_label": "Mean Point with Error Bars",
+        "color": "white"
+    },
+    "gaze":{
+        "inner_circle_color": [255,255,255],
+        "outer_circle_radius": 16, 
+        "radius_diff": 2,
+        "overlay_font": true, 
+        "font_scale": 0.25, 
+        "font_color": [150,150,150], 
+        "font_thickness": 2, 
+        "x_off": -1,
+        "y_off": 3, 
+        "line_length": 30,
+        "line_length_diff": 8
+    },
+    "video":{
+        "codec": "mp4v",
+        "fps": 30.0,
+        "grid_res": [2880,960]
+    },
+    "homography": {
+        "resize": [640, 480]
+    }
+}
