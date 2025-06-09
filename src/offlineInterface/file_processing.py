@@ -15,13 +15,13 @@ import shutil
 
 try:
     from offlineInterface.csv_processor import CSVProcessor
-    from config import config
+    from offlineInterface.config import config
 except:
     #resolve relative paths when executing the interface independently from src/offlineInterface/    
     import sys
     sys.path.append("../")
     from offlineInterface.csv_processor import CSVProcessor
-    from config import config
+    from offlineInterface.config import config
 
 
 class FileProcessor:

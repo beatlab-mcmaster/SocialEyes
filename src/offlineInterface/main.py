@@ -12,7 +12,6 @@ import sys
 import questionary
 import subprocess
 from tqdm import tqdm
-from config import config
 
 try:
     from homography.main import init_homography
@@ -20,7 +19,9 @@ try:
     from offlineInterface.offset_adjust import TimeOffsetAdjuster
     from offlineInterface.file_processing import FileProcessor
     from offlineInterface.cloud_api import *
+    from offlineInterface.config import config
     from adb_download import AdbDownload
+
 except:
     #resolve relative paths when executing the interface independently from src/offlineInterface/    
     import sys
@@ -30,6 +31,7 @@ except:
     from offlineInterface.offset_adjust import TimeOffsetAdjuster
     from offlineInterface.cloud_api import *
     from offlineInterface.file_processing import FileProcessor
+    from offlineInterface.config import config
     from adb_download import AdbDownload
 
 class Session:
