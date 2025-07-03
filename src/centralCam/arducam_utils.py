@@ -8,6 +8,9 @@ Adapted from ArduCam's official demo: https://github.com/ArduCAM/ArduCAM_USB_Cam
 import ArducamSDK
 import arducam_config_parser
 import time
+import pickle
+import cv2
+import numpy as np
 
 ErrorCode_Map = {
     0x0000: "USB_CAMERA_NO_ERROR",
@@ -110,3 +113,152 @@ def camera_initFromFile(fileName, index):
 
 def filetime_to_unix_ns(filetime, filetime_to_epoch = 11644473600 * 10**9):
     return int(filetime * (100)) - filetime_to_epoch
+
+
+# https://github.com/calderonf/OpenCV-Color-Calibration/blob/main/main.py
+def load_calibration_params(filename):
+    # Load the color patches and configuration from a pickle file
+    with open(filename, 'rb') as f:
+        params = pickle.load(f)
+    return params
+
+def reconstruct_model_from_params(params):
+    # Reconstruct the color correction model from parameters
+    color_patches = params['color_patches']
+    model = cv2.ccm_ColorCorrectionModel(color_patches, cv2.ccm.COLORCHECKER_Macbeth)
+    
+    # Configure the model
+    model.setColorSpace(cv2.ccm.COLOR_SPACE_sRGB)
+    model.setCCM_TYPE(cv2.ccm.CCM_3x3)
+    model.setDistance(cv2.ccm.DISTANCE_CIE2000)
+    model.setLinear(cv2.ccm.LINEARIZATION_GAMMA)
+    model.setLinearGamma(2.2)
+    model.setLinearDegree(3)
+    model.setSaturatedThreshold(0, 0.98)
+    
+    # Run the model
+    model.run()
+    return model
+
+def apply_color_correction(image, model):
+    # Apply color correction to the image
+    img_ = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    img_ = img_.astype(np.float64) / 255.0
+
+    # Perform inference with the model
+    calibrated_image = model.infer(img_)
+    out_ = calibrated_image * 255
+    out_[out_ < 0] = 0
+    out_[out_ > 255] = 255
+    out_ = out_.astype(np.uint8)
+
+    # Convert back to BGR
+    out_img = cv2.cvtColor(out_, cv2.COLOR_RGB2BGR)
+    return out_img
+
+
+def calibrate_camera(calibration_file):
+    # Load parameters and reconstruct the model
+    params = load_calibration_params(calibration_file)
+    model = reconstruct_model_from_params(params)
+    cap = cv2.VideoCapture(0)
+
+    # Create resizable windows
+    cv2.namedWindow('Original Video', cv2.WINDOW_NORMAL)
+    cv2.namedWindow('Corrected Video', cv2.WINDOW_NORMAL)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Apply color correction
+        corrected_frame = apply_color_correction(frame, model)
+
+        # Display the original and corrected video
+        cv2.imshow('Original Video', frame)
+        cv2.imshow('Corrected Video', corrected_frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+def save_calibration_params(color_patches, filename):
+    # Save the color patches and configuration to a pickle file
+    params = {
+        'color_patches': color_patches
+    }
+    with open(filename, 'wb') as f:
+        pickle.dump(params, f)
+
+def detect_color_checker(image):
+    # Create a ColorChecker detector
+    detector = cv2.mcc.CCheckerDetector_create()
+    
+    # Process the image to detect the ColorChecker
+    detected = detector.process(image, cv2.mcc.MCC24, 1)
+    
+    if not detected:
+        print("No ColorChecker pattern detected in the image.")
+        return None
+
+    # Get the list of detected ColorCheckers
+    checkers = detector.getListColorChecker()
+    
+    for checker in checkers:
+        # Create a CCheckerDraw object to visualize the ColorChecker
+        cdraw = cv2.mcc.CCheckerDraw_create(checker)
+        img_draw = image.copy()
+        cdraw.draw(img_draw)
+        
+        # Display the image with the ColorChecker visualization
+        cv2.namedWindow('Detected ColorChecker', cv2.WINDOW_NORMAL)
+        cv2.imshow('Detected ColorChecker', img_draw)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+        # Get the detected color patches and rearrange them
+        chartsRGB = checker.getChartsRGB()
+        width, height = chartsRGB.shape[:2]
+        src = chartsRGB[:, 1].copy().reshape(int(width / 3), 1, 3) / 255.0
+
+        # Check the content of src
+        print(f"Content of src:\n{src}")
+        
+        return src
+    
+    return None
+
+def calibrate_image(image, color_patches):
+    try:
+        # Create the color correction model
+        model = cv2.ccm_ColorCorrectionModel(color_patches, cv2.ccm.COLORCHECKER_Macbeth)
+        
+        # Configure the model
+        model.setColorSpace(cv2.ccm.COLOR_SPACE_sRGB)
+        model.setCCM_TYPE(cv2.ccm.CCM_3x3)
+        model.setDistance(cv2.ccm.DISTANCE_CIE2000)
+        model.setLinear(cv2.ccm.LINEARIZATION_GAMMA)
+        model.setLinearGamma(2.2)
+        model.setLinearDegree(3)
+        model.setSaturatedThreshold(0, 0.98)
+        
+        # Run the model
+        model.run()
+        
+        # Get the color correction matrix and loss
+        ccm = model.getCCM()
+        print(f'ccm:\n{ccm}\n')
+        loss = model.getLoss()
+        print(f'loss:\n{loss}\n')
+        
+        return model
+
+    except cv2.error as e:
+        print(f"Error running the color correction model: {e}")
+        return None
+    except Exception as e:
+        print(f"Unknown exception: {e}")
+        return None
