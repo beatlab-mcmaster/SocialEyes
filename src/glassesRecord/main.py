@@ -8,14 +8,14 @@ Purpose: Implements the main interface to monitor and control multiple devices i
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Footer
+from textual.widgets import Footer, Input
 from rich.text import Text
 import numbers
 from adb_wrapper import AdbWrapper
 import threading
 import requests
 import subprocess
-import time
+import os, time, json
 from datetime import datetime, timedelta
 from textual_utils import SelectableRowsDataTable
 from device import Device
@@ -34,12 +34,15 @@ COLUMNS = ("Check", "Device", "IP", "PING", "WIFI", "ADB", "Battery", "Storage",
         )
 
 class TableApp(App):
+    CSS_PATH = "TUI.tcss"
     #could set as reactive elements so we can "watch" it. Alternatively, update at a fixed time interval.
     #ping = reactive(list(range(N_DEVICES))) 
     row_keys = []
     column_keys = []
     devices = []
     offset_logger: OffsetLogger = None
+    file_ts = datetime.now().strftime('%y%m%dT%H%M%S')
+    events_file = os.path.join(config["paths"]["logs"], f"{file_ts}_events.json")
 
     restart_app_in_progress = False
 
@@ -50,6 +53,8 @@ class TableApp(App):
         Sets up the device table, generates IP addresses for devices, and schedules
         periodic updates for various metrics related to the devices.
         """
+        os.makedirs(config["paths"]["logs"], exist_ok=True)
+        self.theme = "textual-dark"
         table = self.query_one(SelectableRowsDataTable)
         table.cursor_type = "row"
         self.column_keys = table.add_columns(*COLUMNS) #is_valid_column_index(self, column_index) can be used to verify
@@ -485,6 +490,29 @@ class TableApp(App):
             print(e)
             pass
         return res   
+    
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Log event to JSON when input is submitted."""
+        input_box = self.query_one(Input)
+        event_text = input_box.value.strip()
+        if not event_text:
+            event_text = "NA"        
+        
+        try:
+            with open(self.events_file, "r") as f:
+                events = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            events = []
+
+        events.append({
+            "timestamp": datetime.now().isoformat(),
+            "event": event_text
+        })
+
+        with open(self.events_file, "w") as f:
+            json.dump(events, f, indent=2)
+        # Clear box
+        input_box.value = ""
 
     #Defining actions
     @work(exclusive=True, thread=True)
@@ -500,7 +528,7 @@ class TableApp(App):
         print("STARTING REC on selected devices")
         
         if not self.offset_logger:
-            self.offset_logger = OffsetLogger(selected_devices)
+            self.offset_logger = OffsetLogger(selected_devices, log_dir=config["paths"]["logs"])
             logger.info(f"Starting Offset logger at {self.offset_logger.log_file}")
             self.offset_logger.log_offsets()
         for d in selected_devices:
@@ -521,11 +549,7 @@ class TableApp(App):
         selected_devices = [row.data[1] for row in table.selected_rows]
         logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
         print("STOPPING REC on selected devices")
-
-        if self.offset_logger:    
-            logger.info("Stopping Offset logger")
-            self.offset_logger.stop_logging()
-            self.offset_logger = None
+            
         logger.info("Stopping recording on devices")
         for d in selected_devices:
             t = threading.Thread(target=self.stop_and_save_recording, args=(d,), daemon=True)
@@ -543,11 +567,7 @@ class TableApp(App):
         logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
         print("DISCARDING REC on selected devices")
 
-        if self.offset_logger:
-            logger.info("Stopping Offset logger")
-            self.offset_logger.stop_logging()
-            self.offset_logger = None
-        logger.info("Stopping recording on devices")
+        logger.info("Discarding recording on devices")
         for d in selected_devices:
             t = threading.Thread(target=self.stop_and_discard_recording, args=(d,), daemon=True)
             t.start()
@@ -592,7 +612,7 @@ class TableApp(App):
             self.restart_app_in_progress = False
             logger.info(f'self.restart_app_in_progress = False')
 
-    @work
+    @work(exclusive=True, thread=True)
     async def action_reconnect_adb(self) -> None:
         """
         Attempts to reconnect to an Android Debug Bridge (ADB) device at the specified IP address(es).
@@ -610,6 +630,19 @@ class TableApp(App):
         
         print('FINISHED restarting adb on all devices!')
 
+    @work(exclusive=True, thread=True)
+    def action_stop_offsets(self) -> None:
+        """"""
+        if self.offset_logger:
+            logger.info("Stopping Offset logger")
+            self.offset_logger.stop_logging()
+            self.offset_logger = None
+
+    def action_toggle_dark(self) -> None:
+        """An action to toggle dark mode."""
+        self.theme = (
+            "solarized-light" if self.theme == "textual-dark" else "textual-dark"
+        )
 
     BINDINGS = [
         Binding(key="q", action="quit", description="Quit the app"),
@@ -619,8 +652,10 @@ class TableApp(App):
             description="Save Recording"), 
         Binding(key="u", action="recording_stop_and_discard", 
            description="Cancel Recording"), 
-        Binding(key="o", action="restart_app_on_devices", description="Restart App"),
+        Binding(key="o", action="stop_offsets", description="Stop offsets logging"),
+        Binding(key="t", action="restart_app_on_devices", description="Restart App"),
         Binding(key="a", action="reconnect_adb", description="Reconnect adb"),
+        Binding(key="d", action="toggle_dark", description="Toggle dark mode"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -630,7 +665,8 @@ class TableApp(App):
             ComposeResult: The composed result containing UI elements.
         """
         yield SelectableRowsDataTable()
-        yield Footer()
+        yield Input(id = "event_tag", placeholder="Enter event tag/desc. here and press 'e' to log the event.", tooltip = "Use Tab to change focus")
+        yield Footer(id = "footer")
 
 def as_colored_text(val, **kwargs):
     """Convert a value into a Rich colored text representation.

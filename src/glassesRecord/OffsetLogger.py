@@ -18,7 +18,7 @@ import os
 class OffsetLogger:
     """This class logs the time offset of each device to a log file"""
 
-    def __init__(self, device_ips: List, log_file: str = None, log_interval: int = 10):
+    def __init__(self, device_ips: List, log_dir: str = "", log_interval: int = 10):
         """Initializes the OffsetLogger instance.
 
         Args:
@@ -28,7 +28,7 @@ class OffsetLogger:
         """
         
         os.makedirs("logs", exist_ok=True)
-        self.log_file = f"logs/{datetime.now().strftime('%y%m%dT%H%M%S')}_offsets.csv" if log_file is None else log_file
+        self.log_file = os.path.join(log_dir, f"{datetime.now().strftime('%y%m%dT%H%M%S')}_offsets.csv")
         print(os.path.abspath(self.log_file))
         self.log_interval = log_interval
         self.devices = device_ips

@@ -1,0 +1,8 @@
+#event_tag {
+    dock: bottom;
+    margin: 2
+}
+
+#footer {
+    height: 1;
+}

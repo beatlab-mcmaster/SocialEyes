@@ -4,6 +4,8 @@
     "host_id": {
         "start": 101,
         "end": 130
+    },
+    "paths": {
+        "logs": "logs/"
     }
-    
 }
