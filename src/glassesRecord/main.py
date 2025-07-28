@@ -665,7 +665,7 @@ class TableApp(App):
             ComposeResult: The composed result containing UI elements.
         """
         yield SelectableRowsDataTable()
-        yield Input(id = "event_tag", placeholder="Enter event tag/desc. here and press 'e' to log the event.", tooltip = "Use Tab to change focus")
+        yield Input(id = "event_tag", placeholder="Enter event tag/desc. here and press enter to log the event.", tooltip = "Use Tab to change focus")
         yield Footer(id = "footer")
 
 def as_colored_text(val, **kwargs):
