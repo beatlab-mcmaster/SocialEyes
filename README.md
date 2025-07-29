@@ -7,7 +7,7 @@
 <div align="center">
   <!-- SocialEyes -->
   <br />
-  <a href="https://tinyurl.com/socialeyes-beatlab"><strong>Check out an example video of the output »</strong></a>
+  <a href="https://www.youtube.com/watch?v=C2XDS80f5tM&ab_channel=ACMSIGCHI"><strong>Watch SIGCHI 2025 presentation video »</strong></a>
   <br />
   <br />
   <a href="https://github.com/beatlab-mcmaster/SocialEyes/issues/new?assignees=&labels=bug&template=01_BUG_REPORT.md&title=bug%3A+">Report a Bug</a>
@@ -28,7 +28,6 @@
 <!-- [![Pull Requests welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg?style=flat-square)](https://github.com/beatlab-mcmaster/socialeyes/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) -->
 </div>
 
-
 <details open="open">
 <summary>Table of Contents</summary>
 
@@ -44,7 +43,7 @@
     - [SocialEyes modules](#socialeyes-modules)
     - [Configuration files](#configuration-files)
     - [SocialEyes paper analysis code](#socialeyes-paper-analysis-code)
-- [Example screenshot](#example-screenshot)
+- [Example outputs](#example-outputs)
 - [Citation](#citation)
 - [License Information](#license-information)
 
@@ -194,13 +193,14 @@ The Offline interface can be operated using arrow keys to navigate different opt
 All code used to generate results and figures for the SocialEyes paper can be found in ['src/analysis/Utility test analysis code/'](src/analysis/Utility%20test%20analysis%20code/)
 
 
-## Example snapshots
+## Example outputs
 
 Example visualisations of 30 eye-tracking datasets recorded and analysed with this implementation is presented below for reference. The gaze from 30 wearers--recorded using the GlassesRecord modul--is mapped and projected to a common space, the centerview--recorded using the CentralCam module. Projected gaze from all wearers is presented as a heatmap in the central grid cell with each wearer's egocentric gaze and worldview recording in the surrounding cells. The gaze projection and display was performed with the Analysis, Homography, and Visualisation modules.
 
 <img src="refs/demo-gif.gif" alt="SocialEyes example" width="1000">
 <img src="refs/demo-gif-jet.gif" alt="SocialEyes example" width="1000">
 
+- [Watch example video](https://tinyurl.com/socialeyes-beatlab) 
 
 ## Citation   
 
