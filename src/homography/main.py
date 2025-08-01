@@ -88,10 +88,10 @@ def init_homography(input_dir, cam_dir, output_dir="./", multi_thread=False, **k
 
     # Generate transformed gaze csv templates
     gaze_tranforms_paths = FileProcessor.generate_csv_templates(opt.output_dir, 'transformed_gaze', glasses_names, [
-                                                                'timestamp [ns]', 'transformed_gaze_x', 'transformed_gaze_y', 'matches_conf', "gaze_x", "scale_w", "gaze_y", "scale_h"])
+                                                                'timestamp [ns]', 'transformed_gaze_x', 'transformed_gaze_y', 'matches_conf', 'H', 'gaze_x', 'scale_w', 'gaze_y', 'scale_h'])
     # Generate homograph failure csv templates
     homography_failure_paths = FileProcessor.generate_csv_templates(
-        opt.output_dir, 'homography_fails', glasses_names, ['timestamp [ns]', 'glasses frame #', 'central frame #', "gaze_x", "scale_w", "gaze_y", "scale_h"])
+        opt.output_dir, 'homography_fails', glasses_names, ['timestamp [ns]', 'glasses frame #', 'central frame #', 'gaze_x', 'scale_w', 'gaze_y', 'scale_h'])
 
     # # Create HomographyProcessor instances
     homography_instances = []

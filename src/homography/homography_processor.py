@@ -235,7 +235,7 @@ class HomographyProcessor:
             
             ## Perform homography
             
-            trans_row = [row["timestamp_corrected"], -1, -1, np.nan, row["gaze x [px]"], scales_g[0], row["gaze y [px]"], scales_g[1]]
+            trans_row = [row["timestamp_corrected"], -1, -1, np.nan, np.nan, row["gaze x [px]"], scales_g[0], row["gaze y [px]"], scales_g[1]]
             inp0 = frame2tensor(gray_g, self.device)
             inp1 = frame2tensor(gray_c, self.device)
             pred = self.matching({'image0': inp0, 'image1': inp1})
@@ -258,7 +258,8 @@ class HomographyProcessor:
                     #Update transformed gaze values in the row
                     trans_row[1] = int(transformed_gaze_x)
                     trans_row[2] = int(transformed_gaze_y) 
-                    trans_row[3] = H 
+                    trans_row[3] = mconf #confidence of the match
+                    trans_row[4] = H #homography matrix
                 else: #rare but possible that findhomography is not able to estimate the homography matrix
                     self.homography_failure.append_csv([row["timestamp_corrected"], self.glasses_counter, self.central_counter, row["gaze x [px]"], scales_g[0], row["gaze y [px]"], scales_g[1]])     
             else:
