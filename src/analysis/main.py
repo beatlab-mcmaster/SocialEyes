@@ -12,11 +12,11 @@ import pandas as pd
 from matplotlib import cm 
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from scipy.spatial import distance, ConvexHull
+from scipy.spatial import distance, ConvexHull,QhullError
 from st_dbscan import ST_DBSCAN 
 
 def add_condition_cols(df, path, re_ip = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', re_cond = r'day(.)_(.*?)/'):
-    r"""
+    """
     Extracts information from a path and adds columns to a DataFrame based on extracted values.
 
     Parameters:
@@ -181,79 +181,190 @@ def CC(saliency_map1, saliency_map2):
     # Compute correlation coefficient
     return np.corrcoef(map1.ravel(), map2.ravel())[0,1]
 
+def stationary_entropy(data, x_col, y_col, bin_size=20, screen_dim=(640, 480), show=False):
+    """
+    Calculate normalized spatial entropy of gaze positions in 2D space.
 
-def stationary_entropy(data, x_col, y_col, bin_size=20, screen_dim=(640,480), show = False):
-    '''
-    Parameters:
-        data - Numpy array of coordinates (x,y) with shape (N,2) where N=number of gaze samples
-        bin_size - size of histogram bins, default set to 1 visual degree for our study
-        screen_dim - (width, height) of screen
-        show - set True to print entropy
-    Returns:
-        norm_H (float): Normalized entropy value of the gaze data spatial distribution.
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        DataFrame containing x and y coordinates of gaze samples.
+    x_col : str
+        Name of the column containing x-coordinates.
+    y_col : str
+        Name of the column containing y-coordinates.
+    bin_size : int, default=20
+        Size of histogram bins in pixels.
+        (e.g., set to 1 visual degree equivalent for your setup)
+    screen_dim : tuple of (int, int), default=(640, 480)
+        Screen width and height in pixels.
+    show : bool, default=False
+        If True, prints intermediate entropy calculations.
 
-    '''
-    df = pd.DataFrame(data, columns=(x_col,y_col)).dropna()
-    df['x_range'] = pd.cut(df[x_col], np.arange(0, screen_dim[0], bin_size), right=False)
-    df['y_range'] = pd.cut(df[y_col], np.arange(0, screen_dim[1], bin_size), right=False)
-    df=df.groupby(['x_range','y_range']).size().reset_index().rename(columns={0:'count'})
-    df['p']=df['count']/df['count'].sum()
-    df['p*log(p)']= np.log2(df['p'])*df['p']
-    max_H = math.log2((screen_dim[0]/bin_size)*(screen_dim[1]/bin_size))
-    H = abs(df['p*log(p)'].sum())
-    norm_H = H/max_H
+    Returns
+    -------
+    float
+        Normalized entropy value (0–1) of the gaze spatial distribution.
+
+    Notes
+    -----
+    - Entropy is computed from the 2D histogram of gaze positions.
+    - Normalization is done by dividing observed entropy by the maximum possible
+      entropy given the screen dimensions and bin size.
+    """
+    df = data[[x_col, y_col]].dropna()
+    df['x_range'] = pd.cut(df[x_col], np.arange(0, screen_dim[0] + bin_size, bin_size), right=False)
+    df['y_range'] = pd.cut(df[y_col], np.arange(0, screen_dim[1] + bin_size, bin_size), right=False)
+    counts = df.groupby(['x_range', 'y_range']).size().reset_index(name='count')
+    counts['p'] = counts['count'] / counts['count'].sum()
+    # Shannon entropy (base 2)
+    counts['p*log(p)'] = counts['p'] * np.log2(counts['p'])
+    # Maximum possible entropy (uniform distribution)
+    max_H = math.log2((screen_dim[0] / bin_size) * (screen_dim[1] / bin_size))
+    # Normalized entropy
+    H = abs(counts['p*log(p)'].sum())
+    norm_H = H / max_H
+
     if show:
-        print('State Spaces',screen_dim[0]/bin_size, '*', screen_dim[1]/bin_size, '=', (screen_dim[0]/bin_size)*(screen_dim[1]/bin_size))
-        print('Maximum entropy', max_H)
-        print('Observed entropy' , H)
-        print('Normalised entropy', norm_H)
+        print(f"State Spaces: {screen_dim[0]/bin_size} × {screen_dim[1]/bin_size} "
+              f"= {(screen_dim[0]/bin_size) * (screen_dim[1]/bin_size)}")
+        print(f"Maximum entropy: {max_H:.4f}")
+        print(f"Observed entropy: {H:.4f}")
+        print(f"Normalized entropy: {norm_H:.4f}")
+
     return norm_H
 
 
-def gaze_velocity(df, x_col, y_col):
+def gaze_derivatives(data, x_col, y_col, ts_col="timestamp_corrected"):
     """
-    Calculate the average velocity of gaze movement based on x and y coordinates.
+    Compute the first, second, and third derivatives (velocity, acceleration, jerk)
+    of gaze position data in a 2D space, based on timestamps.
 
-    Parameters:
-    - df (DataFrame): Pandas DataFrame containing gaze data.
-    - x_col (str): Column name in df representing x-coordinates of gaze positions.
-    - y_col (str): Column name in df representing y-coordinates of gaze positions.
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        DataFrame containing gaze coordinates and timestamps.
+    x_col : str
+        Name of the column containing x-coordinates of gaze.
+    y_col : str
+        Name of the column containing y-coordinates of gaze.
+    ts_col : str, default="timestamp_corrected"
+        Name of the column containing timestamps (must be numeric, in seconds or ms).
 
-    Returns:
-    - mean_velocity (float): Average velocity of gaze movement, calculated as the mean
-      of Euclidean distances between consecutive gaze points.
-    - velocities (Series): Series containing the Euclidean distances (velocities) between
-      consecutive gaze points for each row in the DataFrame.
+    Returns
+    -------
+    tuple
+        velocity_mean : float
+            Mean velocity magnitude.
+        acceleration_mean : float
+            Mean acceleration magnitude.
+        jerk_mean : float
+            Mean jerk magnitude.
+        velocity : pandas.Series
+            Instantaneous velocity magnitude at each timepoint.
+        acceleration : pandas.Series
+            Instantaneous acceleration magnitude at each timepoint.
+        jerk : pandas.Series
+            Instantaneous jerk magnitude at each timepoint.
+
+    Notes
+    -----
+    - All derivatives are computed in Euclidean space from differences in `x` and `y`.
+    - The timestamp column must be uniformly in seconds or milliseconds.
+      If in milliseconds, divide `dt` by 1000 before computing derivatives.
+    - Magnitudes are used for mean values to avoid cancellation of positive/negative changes.
     """
-    x_prev = df[x_col].shift(1)
-    y_prev = df[y_col].shift(1)
-    d_sq = (df[x_col] - x_prev)**2 + (df[y_col] - y_prev)**2
-    d = d_sq.pow(0.5)
-    return d.mean(), d
+    data = data[[x_col, y_col, ts_col]].dropna()
+    d_x = data[x_col].diff()
+    d_y = data[y_col].diff()
+    dt = data[ts_col].diff().astype(float)
 
-def std_2D(x,y):
+    # Compute derivatives
+    velocity = np.sqrt(d_x**2 + d_y**2) / dt
+    acceleration = velocity.diff() / dt #2nd Derivative
+    jerk = acceleration.diff() / dt #3rd Derivative
+
+    return velocity.abs().mean(), acceleration.abs().mean(), jerk.abs().mean(), velocity, acceleration, jerk
+
+def std_2D(data, x_col, y_col):
     """
-    Calculate the Spread of points using standard deviation of Euclidean distances between each point (x[i], y[i]) 
-    and the mean point (x_mean, y_mean) in a 2D space.
+    Calculate the spread of points in a 2D space using the standard deviation of Euclidean distances from each point to the mean point.
 
-    Parameters:
-    x : list or array
-        List of x-coordinates of points.
-    y : list or array
-        List of y-coordinates of points.
-    
-    Returns:
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Input DataFrame containing x and y coordinates.
+    x_col : str
+        Name of the column containing x-coordinates.
+    y_col : str
+        Name of the column containing y-coordinates.
+
+    Returns
+    -------
     float
-        Standard deviation of the Euclidean distances between each point and the mean point.
+        Standard deviation of Euclidean distances from each point to the mean point.
+        Returns NaN if fewer than 2 valid points are provided.
     """
-    x_mean = int(statistics.mean(x))
-    y_mean  = int(statistics.mean(y))
-    d_mean=[]
-    for i,j in zip(x,y):
-        d_mean.append(distance.euclidean([x_mean,y_mean],[i,j]))
-    return statistics.stdev(d_mean)
+    pts = data[[x_col, y_col]].dropna().values
+    num_points = len(pts)
 
+    if num_points < 2:
+        return np.nan
+    
+    # Euclidean distances to mean point
+    x_mean, y_mean = pts.mean(axis=0)
+    distances = [distance.euclidean([x_mean, y_mean], [x, y]) for x, y in pts]
 
+    return statistics.stdev(distances)
+
+def convex_hull(data, x_col, y_col, max_peri=None, max_area=None):
+    """
+    Compute the convex hull for a set of 2D points from a DataFrame and return the perimeter, normalized perimeter, area, normalized area, and point count.
+
+    In 2D:
+        - `hull.area` from SciPy is actually the perimeter length.
+        - `hull.volume` is actually the polygon area.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Input DataFrame containing x and y coordinates.
+    x_col : str
+        Name of the column containing x-coordinates.
+    y_col : str
+        Name of the column containing y-coordinates.
+    max_peri : float, optional
+        Maximum possible perimeter for normalization. If None, normalized perimeter is NaN.
+    max_area : float, optional
+        Maximum possible area for normalization. If None, normalized area is NaN.
+
+    Returns
+    -------
+    perimeter : float
+        Perimeter length of the convex hull.
+    normalized_perimeter : float
+        Perimeter divided by max_peri.
+    area : float
+        Area of the convex hull.
+    normalized_area : float
+        Area divided by max_area.
+    num_points : int
+        Number of valid points used in the computation.
+    """
+    pts = data[[x_col, y_col]].dropna().values
+    num_points = len(pts)
+
+    if num_points > 2:
+        try:
+            hull = ConvexHull(pts)
+            peri, area = hull.area, hull.volume
+            norm_peri = peri / max_peri if max_peri is not None else np.nan
+            norm_area = area / max_area if max_area is not None else np.nan
+            return peri, norm_peri, area, norm_area, num_points
+        except QhullError:
+            pass  # Degenerate case: collinear points
+
+    return np.nan, np.nan, np.nan, np.nan, num_points
 
 
 def DB_centroids(data, eps_spatial, eps_temporal=6, min_samples=2):
