@@ -11,6 +11,7 @@ import os
 import sys
 import questionary
 import subprocess
+from IPython import embed
 from tqdm import tqdm
 
 try:
@@ -59,7 +60,7 @@ class Session:
         self.device_names, self.worldview_vids, self.stream_csvs, self.rec_paths = FileProcessor.parse_glasses_dir(self.root_dir, offset_corrected=False)
         
         questionary.print(f"Found {len(self.device_names)} device recordings")
-        questionary.print(f"Found {len(self.worldview_vids)} worldview videos")
+        questionary.print(f"Found {sum(len(x) if isinstance(x, list) else 1 for x in self.worldview_vids)} worldview videos") #Flattening the list before counting
         for k,v in self.stream_csvs.items():
             questionary.print(f"Found {len(v)} {k} csv files")
     
@@ -175,6 +176,7 @@ if __name__ == "__main__":
                                     "Perform Offset Correction",
                                     "Perform Homography",
                                     "Visualize Homography Results",
+                                    "Debug Interface",
                                     "Exit Interface"]).ask()
 
         if action == "Weed out unnecessary recording directories":
@@ -312,6 +314,9 @@ if __name__ == "__main__":
                     viz_homography_grid(session.root_dir, session.cam_dir, session.hom_op_dir, show_heatmap=True, search_key=search_key, preempt=preempt, offset_corrected= offset_corrected)
                 else:
                     viz_homography_grid(session.root_dir, session.cam_dir, session.hom_op_dir, search_key=search_key, preempt=preempt, offset_corrected= offset_corrected)
+        
+        elif action == "Debug Interface":
+            embed(colors="Linux", banner1="--- DEBUG MODE --- Type exit to go back to the SocialEyes Interface. ", user_ns=locals())
         
         elif action == "Exit Interface":
             if questionary.confirm("Are you sure you want to exit?"):
