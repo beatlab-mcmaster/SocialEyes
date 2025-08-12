@@ -124,6 +124,7 @@ class FileProcessor:
         glasses_names, worldview_vids, rec_paths = [], [], []
         stream_csvs = {"gaze": [], "world": [], "fixations": [], "blinks": [], "events": [], "imu": [], "saccades": [], "3d_eye_states": []}
         pre = "ts_corr_" if offset_corrected else ""
+        worldview_pattern = re.compile(config["paths"]["worldview_video_filename_re"])
 
         #Pupil Labs recording directories are named as UIDs so the following lines recursively searches for all dirs that match the UID regex
         uid_pattern = re.compile(r'[a-fA-F0-9]{8}-?[a-fA-F0-9]{4}-?[a-fA-F0-9]{4}-?[a-fA-F0-9]{4}-?[a-fA-F0-9]{12}')
@@ -133,12 +134,13 @@ class FileProcessor:
                 if os.path.isdir(p) and uid_pattern.fullmatch(os.path.basename(p)) and not os.path.basename(p).startswith("b5b4"): #rejecting workspace dirs which are also named as UIDs
                     name = None
                     rec_paths.append(p)
+                    device_worldviews = []
                     for file_ in glob.glob(os.path.join(p, "**"), recursive=True):
                         #check extension and search phrase
                         if (not os.path.isfile(file_)) or (search_key not in file_):
                             continue
-                        elif os.path.basename(file_) == config["paths"]["worldview_video_filename"]:
-                            worldview_vids.append(file_)
+                        elif worldview_pattern.fullmatch(os.path.basename(file_)): #There could be more than one worldview videos in a recording
+                            device_worldviews.append(file_)
                         elif os.path.basename(file_) == pre + config["paths"]["worldview_csv_filename"]:
                             stream_csvs["world"].append(file_)
                         elif os.path.basename(file_) == pre + config["paths"]["gaze_csv_filename"]:
@@ -160,6 +162,7 @@ class FileProcessor:
                                 data = json.load(f)
                                 name = data.get('android_device_name')
                     
+                    worldview_vids.append(device_worldviews) #one item per device.
                     name = name if name is not None else FileProcessor.device_name_from_path(p, name_as_ip=config["defaults"]["device_name_as_ip"])
                     glasses_names.append(name)
             except Exception as e:

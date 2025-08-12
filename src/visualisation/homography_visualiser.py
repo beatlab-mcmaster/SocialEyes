@@ -11,13 +11,13 @@ import os
 import numpy as np
 from tqdm import tqdm
 try:
-    from homography.homography_processor import Stream
+    from homography.stream import Stream
     from offlineInterface.csv_processor import CSVProcessor
 except:
     #resolve relative paths when executing independently    
     import sys
     sys.path.append("../")
-    from homography.homography_processor import Stream
+    from homography.stream import Stream
     from offlineInterface.csv_processor import CSVProcessor
 
 

@@ -7,7 +7,6 @@ Purpose: This class contains all the main processing for homography.
 
 import pandas as pd
 import cv2
-import re, os
 import numpy as np
 import torch
 torch.set_grad_enabled(False)
@@ -17,64 +16,14 @@ from tqdm import tqdm
 
 try:
     from offlineInterface.csv_processor import CSVProcessor
+    from homography.stream import Stream
 except:
     #resolve relative paths when executing independently  
     import sys
     sys.path.append("../")
     from offlineInterface.csv_processor import CSVProcessor
+    from homography.stream import Stream
 
-class Stream:
-     """
-     Class to retrieve frames from a video stream
-
-     Attributes:
-        vid_path (str): Path to the video file.
-        cap (cv2.VideoCapture): Video capture object.
-        max_length (int): Total number of frames in the video.
-        resize_res (tuple): Resolution to which frames are resized (width, height).
-     """
-
-     def __init__(self, vid_path, resize_res):
-        """
-        Initializes the Stream object with a video path and resize resolution.
-
-        Args:
-            vid_path (str): Path to the video file.
-            resize_res (tuple): Resolution to resize frames to, specified as (width, height).
-        """ 
-        self.vid_path = vid_path
-        self.cap = cv2.VideoCapture(vid_path)
-        self.max_length = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.resize_res = (resize_res[0], resize_res[1])
-
-     def next_frame(self, seek=0):
-        """
-        Retrieves the next frame from the video stream, optionally seeking to a specific frame.
-
-        Args:
-            seek (int, optional): Frame number to seek to. Defaults to 0, which continues from the current frame.
-
-        Returns:
-            tuple: A tuple containing:
-                - image (numpy.ndarray): The resized color frame.
-                - gray (numpy.ndarray): The resized grayscale frame.
-                - scales (tuple): Scaling factors for width and height (original_width / new_width, original_height / new_height).
-
-        Raises:
-            Exception: If the frame cannot be retrieved.
-        """
-        if seek != 0:
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, seek-1)
-        ret, image = self.cap.read()
-        if ret:
-            w, h = image.shape[1], image.shape[0]    
-            image = cv2.resize(image, self.resize_res, cv2.INTER_AREA)
-            w_new, h_new = image.shape[1], image.shape[0]
-            scales = (float(w) / float(w_new), float(h) / float(h_new))
-            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-            return image, gray, scales
-        else:
-            raise Exception("Cannot seek to next frame for vid:", self.vid_path)
 
 class HomographyProcessor:
     """
@@ -110,7 +59,8 @@ class HomographyProcessor:
     - cleanup(): Cleans up entire module after use.
     """
 
-    def __init__(self, opt, glasses_video_path, glasses_timestamp_path, gaze_path, transformed_path, homography_failure_path, central_video_path, central_timestamp_path):
+    def __init__(self, id, opt, glasses_video_path, glasses_timestamp_path, gaze_path, transformed_path, homography_failure_path, central_video_path, central_timestamp_path):
+        self.id = id
         self.opt = opt
         self.glasses_video_path = glasses_video_path
         self.glasses_timestamp_path = glasses_timestamp_path
@@ -119,12 +69,6 @@ class HomographyProcessor:
         self.homography_failure_path = homography_failure_path
         self.central_video_path = central_video_path
         self.central_timestamp_path = central_timestamp_path
-        #test start
-        # ip = re.findall(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', glasses_video_path)[0]
-        # test_video_dump_path = os.path.join("/InPerson/test_dumps",ip+".mp4") 
-        # fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-        # self.out = cv2.VideoWriter(test_video_dump_path, fourcc, 30.0, (self.opt.resize[0]*2, self.opt.resize[1]))
-        #test end
         self.device = None
         self.config = None
         self.matching = None
@@ -214,7 +158,7 @@ class HomographyProcessor:
         These transformed gaze coordinates are then logged into a CSV File.
         """
         # Perform homography loop
-        for i,row in tqdm(self.merged_df.iterrows()):
+        for i,row in tqdm(self.merged_df.iterrows(), desc=id):
             # Read frames from the glasses and central videos
             try:
                 image_g, gray_g, scales_g = self.glasses_cap.next_frame()
@@ -272,6 +216,6 @@ class HomographyProcessor:
         Clean up all capture instances.
         """
         # cv2.destroyAllWindows()
-        self.glasses_cap.cap.release()
-        self.central_cap.cap.release()
+        self.glasses_cap.close()
+        self.central_cap.close()
         # self.out.release()

@@ -7,15 +7,10 @@ Purpose: This script performs homography on each of the Pupil Devices.
 """
 
 import time
-import os
 import torch
 torch.set_grad_enabled(False)
 import argparse
 import concurrent.futures
-import seaborn as sns
-import cv2
-import numpy as np
-from matplotlib import cm 
 from tqdm import tqdm
 
 try:
@@ -78,7 +73,7 @@ def init_homography(input_dir, cam_dir, output_dir="./", multi_thread=False, **k
     
     start = time.time()
     
-    # Unzip zip from pupil cloud
+    # Fetch the video and gaze paths.
     glasses_names, worldview_video_paths, stream_csvs, _  = FileProcessor.parse_glasses_dir(opt.input_dir, **kargs)
     worldview_timestamps_paths = stream_csvs["world"]
     gaze_paths = stream_csvs["gaze"]
@@ -89,7 +84,7 @@ def init_homography(input_dir, cam_dir, output_dir="./", multi_thread=False, **k
     # Generate transformed gaze csv templates
     gaze_tranforms_paths = FileProcessor.generate_csv_templates(opt.output_dir, 'transformed_gaze', glasses_names, [
                                                                 'timestamp [ns]', 'transformed_gaze_x', 'transformed_gaze_y', 'matches_conf', 'H', 'gaze_x', 'scale_w', 'gaze_y', 'scale_h'])
-    # Generate homograph failure csv templates
+    # Generate homography failure csv templates
     homography_failure_paths = FileProcessor.generate_csv_templates(
         opt.output_dir, 'homography_fails', glasses_names, ['timestamp [ns]', 'glasses frame #', 'central frame #', 'gaze_x', 'scale_w', 'gaze_y', 'scale_h'])
 
@@ -98,6 +93,7 @@ def init_homography(input_dir, cam_dir, output_dir="./", multi_thread=False, **k
     for i in range(len(glasses_names)):
         # Perform homography
         homography_instances.append(HomographyProcessor(
+            glasses_names[i],
             opt,
             worldview_video_paths[i],
             worldview_timestamps_paths[i],
