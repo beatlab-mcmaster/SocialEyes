@@ -61,12 +61,19 @@ class TableApp(App):
 
         self.devices = []
         
-        #Generate ip addrs of devices using config parameters
-        network_id = config["network_id"]
-        host_id_range = range(config["host_id"]["start"], config["host_id"]["end"]+1)
+        #Generate ip addrs of devices using config parameters (looks for a host_id range by default)
+        if "network_id" in config and "host_id" in config and config["network_id"] and (config["host_id"]["start"] <= config["host_id"]["end"]):
+            network_id = config["network_id"]
+            host_id_range = range(config["host_id"]["start"], config["host_id"]["end"]+1)
+            ip_list = [f"{network_id}.{host_id}" for host_id in host_id_range]
+        elif "ip_list" in config:
+            ip_list = config["ip_list"]
+        else:
+            raise ValueError("Configuration must contain either 'network_id' and 'host_id' or 'ip_list'.")
         
-        for host_id in host_id_range:
-            d = Device(f'{network_id}.{host_id}', '5555')
+        #Populate devices 
+        for ip_addr in ip_list:
+            d = Device(str(ip_addr), '5555')
             self.devices.append(d)
 
         data = [(None, d.ip_addr, None, None, None, None, None, None, None, None, None, None, None, None, None) for d in self.devices]

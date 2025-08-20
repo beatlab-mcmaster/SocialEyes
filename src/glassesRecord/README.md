@@ -37,8 +37,9 @@ To summarize the important steps:
 
 1. Check the network config parameters in `config.json` so the devices could be found on network.
 
-        ```
+    By default, SocialEyes will look for a range of IP addresses provided using the following config parameters:
 
+        ```
         {
             "network_id": "192.168.50",  // The base IP address for the network. This defines the subnet in which devices will be located.
             
@@ -49,6 +50,20 @@ To summarize the important steps:
         }
 
         ```
+
+    Alternatively, you can specify individual device IP addresses using the `ip_list` parameter. This is helpful when you have less number of devices and/or non-sequential IP addresses. Remember to set `"network_id"` to an empty string (`""`) in this case:
+
+
+        ```
+        {
+            "ip_list": [
+                "192.168.50.101",
+                "192.168.50.105",
+                "192.168.50.110"
+            ]
+        }
+        ```
+
 
 2. Install the requirements with `pip install -r requirements.txt` 
 
