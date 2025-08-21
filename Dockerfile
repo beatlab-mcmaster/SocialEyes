@@ -1,28 +1,26 @@
-# Base image
-FROM ubuntu:24.04
-WORKDIR /SocialEyes
-ENV DEBIAN_FRONTEND=noninteractive
+# -------- Base: Python + Debian slim --------
+FROM python:3.12-slim
 
-# System dependencies and Python 3.12
-RUN apt update && apt install -y \
-    python3.12 \
-    python3.12-venv \
-    python3.12-dev \
-    python3-full \
-    pipx \
-    iputils-ping \  
+ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /SocialEyes
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     libgl1 \
     libglib2.0-0 \
-    android-tools-adb \
-    && apt clean
+    adb \
+    iputils-ping \
+ && rm -rf /var/lib/apt/lists/*
 
-# Run demo in venv
-CMD ["/bin/bash", "-c", "\
-    if [ ! -d \"/SocialEyes/venv\" ]; then \
-        python3 -m venv /SocialEyes/venv && \
-        source /SocialEyes/venv/bin/activate && \
-        pip install --no-cache-dir -r /SocialEyes/requirements.txt; \
-    else \
-        source /SocialEyes/venv/bin/activate; \
-    fi && \
-    python /SocialEyes/demo.py"]
+# Create a dedicated venv OUTSIDE the bind mount, and add to PATH
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
+
+# Pre-install requirements at build time for speed
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Default command: open interactive shell
+CMD ["/bin/bash"]
