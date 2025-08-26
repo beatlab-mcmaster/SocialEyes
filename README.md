@@ -227,7 +227,7 @@ This repository includes the SuperGlue software as a submodule.
 SuperGlue is licensed under the "Academic or Non-Profit Organization Noncommercial Research Use Only" license.
 Please refer to the LICENSE file within the SuperGlue submodule for more details on its terms and restrictions.
 
-
 ---
+If you find this project useful, you can support it by giving this repo a [![Star](https://img.shields.io/badge/Star-000?logo=github&logoColor=white)](https://github.com/beatlab-mcmaster/SocialEyes)
 
 [![code with love by ShreshthSaxena](https://img.shields.io/badge/%3C%2F%3E%20with%20%E2%99%A5%20by-ShreshthSaxena-ff1414.svg?style=flat-square)](https://github.com/ShreshthSaxena)
