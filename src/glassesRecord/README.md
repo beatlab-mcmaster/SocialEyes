@@ -35,9 +35,19 @@ To summarize the important steps:
 
 ## Usage
 
-1. Check the network config parameters in `config.json` so the devices could be found on network.
+1. Install the requirements with `pip install -r requirements.txt` 
 
-    By default, SocialEyes will look for a range of IP addresses provided using the following config parameters:
+2. Check the network config parameters in `config.json` so the devices could be found on network.
+
+3. Configure other parameters in `config.json`. See the next section for parameter descriptions.
+
+4. Run the module with `python3 main.py` 
+
+## Config
+
+The following parameters can be set in config.json to configure your recording session:
+
+    - By default, SocialEyes will look for a range of IP addresses provided using the following config parameters:
 
         ```
         {
@@ -62,12 +72,38 @@ To summarize the important steps:
                 "192.168.50.110"
             ]
         }
+        ``` 
+
+    - The `"logs"` section lets you set:
+        - `"path"`: Directory where log files will be stored.
+        - `"level"`: Logging verbosity (e.g., `"INFO"`, `"DEBUG"`).
+        - `"interval"`: Time interval (in seconds) for periodic logging or updates.
+
+    - The `"single_session_mode"` option controls whether the recording session will involve a single recording start (and stop) for all releavant devices (`true`) OR it requires multiple concurrent recording starts with different batches of devices (`false`). 
+
+    - The `"update_times"` section allows you to specify custom update intervals for different batches of device metrics. 
+
         ```
+        **Batch 1 Metrics**
 
-
-2. Install the requirements with `pip install -r requirements.txt` 
-
-3. Run the module with `python3 main.py` 
+        PING (Device network latency)
+        WIFI (WiFi networks)
+        ADB (ADB connection status)
+        USB (USB connections)
+        RED_INDICATOR (Red light indicator events)
+        Storage (Free disk space)
+        Battery (Battery level)
+        App (Active app status)
+        
+        **Batch 2 Metrics**
+        
+        API (App API status)
+        RTSP (RTSP streaming status)
+        PL_Rec (Recording state)
+        PL_Rec_ID (Recording ID)
+        PL_Rec_Duration (Recording duration)
+        Device (App device name/identifier)
+        ```
 
 ### Debugging and Logs
 - Run the following command to start the application in development mode: `textual run --dev main.py`

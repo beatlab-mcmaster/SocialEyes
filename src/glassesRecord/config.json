@@ -11,7 +11,14 @@
         "192.168.2.124",
         "192.168.2.016"
     ],
-    "paths": {
-        "logs": "logs/"
-    }
+    "logs": {
+        "path": "logs/",
+        "level": "INFO",
+        "interval": 10
+    },
+    "update_times": {
+        "batch1": 3,
+        "batch2": 5
+    },
+    "single_session_mode": true
 }

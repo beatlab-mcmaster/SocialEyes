@@ -22,16 +22,6 @@ import traceback
 import logging
 import pytz
 import html
-
-
-base_dir = os.path.abspath(os.path.dirname(__file__))
-os.makedirs(os.path.join(base_dir,"logs"), exist_ok=True)
-
-logging.basicConfig(
-    filename=os.path.join(base_dir,"logs", str(datetime.now().strftime('%y%m%dT%H%M%S')) + '_log.txt'), 
-    encoding='utf-8', 
-    level=logging.INFO, # change to DEBUG if required
-    format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s') 
 from enum import Enum 
 
 class RecordingState(Enum):

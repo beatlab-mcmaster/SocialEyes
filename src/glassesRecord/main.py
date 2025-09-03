@@ -21,10 +21,8 @@ from textual_utils import SelectableRowsDataTable
 from device import Device
 from OffsetLogger import OffsetLogger
 from config import config
-
 import logging
-logging.getLogger('pupil_labs.realtime_api.time_echo').setLevel(logging.ERROR)
-logger = logging.getLogger('main_device_monitor')
+
 
 #Define column fields
 COLUMNS = ("Check", "Device", "IP", "PING", "WIFI", "ADB", "Battery", "Storage", "USB", "RED_INDICATOR", 
@@ -40,9 +38,12 @@ class TableApp(App):
     row_keys = []
     column_keys = []
     devices = []
-    offset_logger: OffsetLogger = None
-    file_ts = datetime.now().strftime('%y%m%dT%H%M%S')
-    events_file = os.path.join(config["paths"]["logs"], f"{file_ts}_events.json")
+    offset_logger = None
+    logger = None
+    session_id = datetime.now().strftime('%y%m%dT%H%M%S') #Session ID created using timestamp; could also be created using UUID, user input, etc.
+    session_dir = os.path.join(config["logs"]["path"], session_id)
+    events_file = os.path.join(session_dir, "events.json")
+    single_session_mode = config["single_session_mode"]
 
     restart_app_in_progress = False
 
@@ -53,15 +54,29 @@ class TableApp(App):
         Sets up the device table, generates IP addresses for devices, and schedules
         periodic updates for various metrics related to the devices.
         """
-        os.makedirs(config["paths"]["logs"], exist_ok=True)
+
+        ## Setup session directory and logging
+        try:
+            os.makedirs(self.session_dir)
+        except FileExistsError:
+            print("Session folder already exists, please try again.")
+            self.app.exit()
+        logging.basicConfig(
+            filename=os.path.join(self.session_dir,'logs.txt'), 
+            encoding='utf-8', 
+            level=config["logs"]["level"], # change to DEBUG if required
+            format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s') 
+        logging.getLogger('pupil_labs.realtime_api.time_echo').setLevel(logging.ERROR)
+        self.logger = logging.getLogger('glassesRecord_TUI')
+        
+        # Setup app theme and table
         self.theme = "textual-dark"
         table = self.query_one(SelectableRowsDataTable)
         table.cursor_type = "row"
         self.column_keys = table.add_columns(*COLUMNS) #is_valid_column_index(self, column_index) can be used to verify
 
-        self.devices = []
-        
         #Generate ip addrs of devices using config parameters (looks for a host_id range by default)
+        self.devices = []
         if "network_id" in config and "host_id" in config and config["network_id"] and (config["host_id"]["start"] <= config["host_id"]["end"]):
             network_id = config["network_id"]
             host_id_range = range(config["host_id"]["start"], config["host_id"]["end"]+1)
@@ -76,13 +91,16 @@ class TableApp(App):
             d = Device(str(ip_addr), '5555')
             self.devices.append(d)
 
+        #Init offset logger for all devices if not in single session mode
+        if not self.single_session_mode:
+            self.offset_logger = {dev: None for dev in ip_list}
+
         data = [(None, d.ip_addr, None, None, None, None, None, None, None, None, None, None, None, None, None) for d in self.devices]
         self.row_keys = table.add_rows(data)
         table.styles.scroll_x = "scroll_x"
-
         #Splitting columns into two batches with different update timers. This setting could be configured further with more batches or a single batch.
-        self.set_interval(3, self.batch_col_update1)
-        self.set_interval(5, self.batch_col_update2)
+        self.set_interval(config["update_times"]["batch1"], self.batch_col_update1)
+        self.set_interval(config["update_times"]["batch2"], self.batch_col_update2)
 
         self.table_app_start_time = datetime.now()
 
@@ -451,12 +469,12 @@ class TableApp(App):
         time.sleep(3)
 
         try:
-            logger.info(f'Start recording on {ip_addr}')
+            self.logger.info(f'Start recording on {ip_addr}')
             res = requests.post(f"http://{ip_addr}:8080/api/recording:start", timeout=2).json()
             time.sleep(0.1)
             self.lock_phone(ip_addr)
         except Exception as e:
-            logger.error(f'{ip_addr}, {e}')
+            self.logger.error(f'{ip_addr}, {e}')
             pass
         
         return res  
@@ -472,10 +490,9 @@ class TableApp(App):
         """
         res = None
         try:
-            logger.info(f'Stop and save recording on {ip_addr}')
             res = requests.post(f"http://{ip_addr}:8080/api/recording:stop_and_save", timeout=2).json()
         except Exception as e:
-            logger.error(f'{ip_addr}, {e}')
+            self.logger.error(f'{ip_addr}, {e}')
             pass
         return res  
 
@@ -490,10 +507,9 @@ class TableApp(App):
         """
         res = None
         try:
-            logger.info(f'Stop and discard recording on {ip_addr}')
             res = requests.post(f"http://{ip_addr}:8080/api/recording:cancel", timeout=2).json()
         except Exception as e:
-            logger.error(f'{ip_addr}, {e}')
+            self.logger.error(f'{ip_addr}, {e}')
             print(e)
             pass
         return res   
@@ -521,6 +537,29 @@ class TableApp(App):
         # Clear box
         input_box.value = ""
 
+    def stop_recording_offsets(self, device_list):
+        """
+        Stop logging offsets for the specified devices.
+        Args:
+            devices (list): List of device IP addresses to stop logging offsets for.
+        """
+        try:
+            if self.single_session_mode:
+                if self.offset_logger:
+                    self.offset_logger.stop_logging()
+                    self.offset_logger = None
+                    self.logger.info("Stopped offset logging for all devices.")
+            else:
+                for dev in device_list:
+                    if self.offset_logger[dev]:
+                        self.offset_logger[dev].stop_logging()
+                        self.offset_logger[dev] = None
+                self.logger.info("Stopped offset logging for devices: {}".format(device_list))
+        except Exception as e:
+            self.logger.error(f'Error stopping offset logging: {e}')
+            print(e)
+            pass
+
     #Defining actions
     @work(exclusive=True, thread=True)
     async def action_recording_start(self) -> None:
@@ -531,13 +570,22 @@ class TableApp(App):
         """
         table = self.query_one(SelectableRowsDataTable)
         selected_devices = [row.data[1] for row in table.selected_rows]
-        logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
+        self.logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
         print("STARTING REC on selected devices")
         
-        if not self.offset_logger:
-            self.offset_logger = OffsetLogger(selected_devices, log_dir=config["paths"]["logs"])
-            logger.info(f"Starting Offset logger at {self.offset_logger.log_file}")
-            self.offset_logger.log_offsets()
+        if self.single_session_mode:
+            if not self.offset_logger:
+                self.offset_logger = OffsetLogger(selected_devices, log_dir=self.session_dir, log_interval=config["logs"]["interval"])
+                self.logger.info(f"Starting Offset logger at {self.offset_logger.log_file}")
+                self.offset_logger.log_offsets()
+        else:
+            for dev in selected_devices:
+                if not self.offset_logger[dev]:
+                    self.offset_logger[dev] = OffsetLogger([dev], log_dir=os.path.join(self.session_dir, str(dev)), log_interval=config["logs"]["interval"])
+                    self.logger.info(f"Starting Offset logger at {self.offset_logger[dev].log_file} for device: {dev}")
+                    self.offset_logger[dev].log_offsets()
+
+        #Start recording on all devices independently
         for d in selected_devices:
             t = threading.Thread(target=self.start_recording, args=(d,), daemon=True)
             t.start()
@@ -554,10 +602,10 @@ class TableApp(App):
         """
         table = self.query_one(SelectableRowsDataTable)
         selected_devices = [row.data[1] for row in table.selected_rows]
-        logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
-        print("STOPPING REC on selected devices")
-            
-        logger.info("Stopping recording on devices")
+        print("STOPPING REC on selected device(s): ", selected_devices)
+        self.logger.info(f"Stopping recording on {len(selected_devices)} device(s): {selected_devices}")
+        # Stop offset logging if it was started
+        self.stop_recording_offsets(selected_devices)
         for d in selected_devices:
             t = threading.Thread(target=self.stop_and_save_recording, args=(d,), daemon=True)
             t.start()
@@ -571,10 +619,10 @@ class TableApp(App):
         """
         table = self.query_one(SelectableRowsDataTable)
         selected_devices = [row.data[1] for row in table.selected_rows]
-        logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
         print("DISCARDING REC on selected devices")
-
-        logger.info("Discarding recording on devices")
+        # Stop offset logging if it was started
+        self.stop_recording_offsets(selected_devices)
+        self.logger.info(f"Discarding recording on {len(selected_devices)} device(s): {selected_devices}")
         for d in selected_devices:
             t = threading.Thread(target=self.stop_and_discard_recording, args=(d,), daemon=True)
             t.start()
@@ -586,9 +634,9 @@ class TableApp(App):
         This method retrieves the selected devices from the UI and restarts 
         the Neon Companion application on each one.
         """
-        logger.info('action_restart_app_on_devices triggered!')
+        self.logger.info('action_restart_app_on_devices triggered!')
         if self.restart_app_in_progress:
-            logger.info('Another restart progress is already in progress, nothing to do...')
+            self.logger.info('Another restart progress is already in progress, nothing to do...')
             return
         print("RESTARTING APP on selected devices")
         
@@ -597,14 +645,14 @@ class TableApp(App):
 
             table = self.query_one(SelectableRowsDataTable)
             selected_device_ip_addrs = [row.data[1] for row in table.selected_rows]
-            logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))
+            self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))
 
             def f(ip_addr):
-                logger.info(f'Restarting app on {ip_addr}...')
+                self.logger.info(f'Restarting app on {ip_addr}...')
                 adb_wrapper = AdbWrapper(ip_addr)
                 adb_wrapper.stop_neon_companion_app()
                 adb_wrapper.start_neon_companion_app()
-                logger.info(f'Restarting app on {ip_addr} has finished!')
+                self.logger.info(f'Restarting app on {ip_addr} has finished!')
             
             tasks = []
             for ip_addr in selected_device_ip_addrs:
@@ -614,10 +662,10 @@ class TableApp(App):
             
             for t in tasks:
                 t.join()
-            logger.info(f'Restarting apps has finished!')
+            self.logger.info(f'Restarting apps has finished!')
         finally:
             self.restart_app_in_progress = False
-            logger.info(f'self.restart_app_in_progress = False')
+            self.logger.info(f'self.restart_app_in_progress = False')
 
     @work(exclusive=True, thread=True)
     async def action_reconnect_adb(self) -> None:
@@ -628,22 +676,26 @@ class TableApp(App):
         print("RESTARTING ADB on selected devices!")
         table = self.query_one(SelectableRowsDataTable)
         selected_device_ip_addrs = [row.data[1] for row in table.selected_rows]
-        logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))          
+        self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))     
+
+        def run_adb_cmd(ip_addr):
+            """Runs the adb connect command for a single device."""
+            self.logger.info(f"Restarting adb on {ip_addr}...")
+            res = subprocess.run(f"adb connect {ip_addr}:5555", shell=True, capture_output=True, text=True)
+            self.logger.info(res.stdout.strip())
 
         for ip_addr in selected_device_ip_addrs:
-            logger.info(f'Restarting adb on {ip_addr}...')
-            res = subprocess.run("adb connect {}:5555".format(ip_addr), shell=True, capture_output=True, text=True).stdout
-            logger.info(res.strip())
+            t = threading.Thread(target=run_adb_cmd, args=(ip_addr,), daemon=True)
+            t.start()
         
-        print('FINISHED restarting adb on all devices!')
+        print('FINISHED dispatching adb restart threads!')
 
     @work(exclusive=True, thread=True)
-    def action_stop_offsets(self) -> None:
-        """"""
-        if self.offset_logger:
-            logger.info("Stopping Offset logger")
-            self.offset_logger.stop_logging()
-            self.offset_logger = None
+    def action_stop_all_offsets(self) -> None:
+        """
+        Stops all ongoing offset logging activities.
+        """
+        self.stop_recording_offsets(self.devices)
 
     def action_toggle_dark(self) -> None:
         """An action to toggle dark mode."""
@@ -659,7 +711,7 @@ class TableApp(App):
             description="Save Recording"), 
         Binding(key="u", action="recording_stop_and_discard", 
            description="Cancel Recording"), 
-        Binding(key="o", action="stop_offsets", description="Stop offsets logging"),
+        Binding(key="o", action="stop_all_offsets", description="Stop offsets logging on all devices"),
         Binding(key="t", action="restart_app_on_devices", description="Restart App"),
         Binding(key="a", action="reconnect_adb", description="Reconnect adb"),
         Binding(key="d", action="toggle_dark", description="Toggle dark mode"),
