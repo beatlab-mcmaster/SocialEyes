@@ -8,8 +8,9 @@ Purpose: Implements the main interface to monitor and control multiple devices i
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Footer, Input
+from textual.widgets import Footer, Input, Label
 from rich.text import Text
+from asyncio import sleep
 import numbers
 from adb_wrapper import AdbWrapper
 import threading
@@ -44,6 +45,9 @@ class TableApp(App):
     session_dir = os.path.join(config["logs"]["path"], session_id)
     events_file = os.path.join(session_dir, "events.json")
     single_session_mode = config["single_session_mode"]
+    status_widget = None
+    status_messages = [f"   glassesRecord TUI started in {"single-session mode" if single_session_mode else "multi-session mode"}; Session ID: {session_id}"]
+    status_len = config["logs"]["TUI_messages_len"] # Number of status messages to keep
 
     restart_app_in_progress = False
 
@@ -68,6 +72,7 @@ class TableApp(App):
             format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s') 
         logging.getLogger('pupil_labs.realtime_api.time_echo').setLevel(logging.ERROR)
         self.logger = logging.getLogger('glassesRecord_TUI')
+        self.status_widget = self.query_one(Label)
         
         # Setup app theme and table
         self.theme = "textual-dark"
@@ -560,6 +565,18 @@ class TableApp(App):
             print(e)
             pass
 
+    def update_status_widget(self, new_msg):
+        """Update the status widget with the provided message.
+
+        Args:
+            message (str): The message to display in the status widget.
+        """
+        self.status_messages.append(new_msg)
+        self.status_messages = self.status_messages[-self.status_len:] 
+
+        if self.status_widget:
+            self.status_widget.update('\n'.join(self.status_messages))
+
     #Defining actions
     @work(exclusive=True, thread=True)
     async def action_recording_start(self) -> None:
@@ -571,7 +588,8 @@ class TableApp(App):
         table = self.query_one(SelectableRowsDataTable)
         selected_devices = [row.data[1] for row in table.selected_rows]
         self.logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
-        print("STARTING REC on selected devices")
+        self.update_status_widget(f"    Starting recording on {len(selected_devices)} device(s)...")
+        # print("STARTING REC on selected devices")
         
         if self.single_session_mode:
             if not self.offset_logger:
@@ -589,6 +607,8 @@ class TableApp(App):
         for d in selected_devices:
             t = threading.Thread(target=self.start_recording, args=(d,), daemon=True)
             t.start()
+        
+        self.update_status_widget(f"    Start recordings action completed!")
     
 
     ## Implementing action keys below to control the execution of certain operations manually by the operator.
@@ -602,13 +622,15 @@ class TableApp(App):
         """
         table = self.query_one(SelectableRowsDataTable)
         selected_devices = [row.data[1] for row in table.selected_rows]
-        print("STOPPING REC on selected device(s): ", selected_devices)
+        self.update_status_widget(f"    Saving recording on {len(selected_devices)} device(s)...")
+        # print("STOPPING REC on selected device(s): ", selected_devices)
         self.logger.info(f"Stopping recording on {len(selected_devices)} device(s): {selected_devices}")
         # Stop offset logging if it was started
         self.stop_recording_offsets(selected_devices)
         for d in selected_devices:
             t = threading.Thread(target=self.stop_and_save_recording, args=(d,), daemon=True)
             t.start()
+        self.update_status_widget(f"    Save recordings action completed!")
 
     @work(exclusive=True, thread=True)
     async def action_recording_stop_and_discard(self) -> None:
@@ -619,13 +641,15 @@ class TableApp(App):
         """
         table = self.query_one(SelectableRowsDataTable)
         selected_devices = [row.data[1] for row in table.selected_rows]
-        print("DISCARDING REC on selected devices")
+        self.update_status_widget(f"    Discarding recordings on {len(selected_devices)} device(s)...")
+        # print("DISCARDING REC on selected devices")
         # Stop offset logging if it was started
-        self.stop_recording_offsets(selected_devices)
         self.logger.info(f"Discarding recording on {len(selected_devices)} device(s): {selected_devices}")
+        self.stop_recording_offsets(selected_devices)
         for d in selected_devices:
             t = threading.Thread(target=self.stop_and_discard_recording, args=(d,), daemon=True)
             t.start()
+        self.update_status_widget(f"    Discard recordings action completed!")
 
     @work(exclusive=True, thread=True)
     async def action_restart_app_on_devices(self) -> None:
@@ -645,6 +669,7 @@ class TableApp(App):
 
             table = self.query_one(SelectableRowsDataTable)
             selected_device_ip_addrs = [row.data[1] for row in table.selected_rows]
+            self.update_status_widget(f"    Restarting app on {len(selected_device_ip_addrs)} devices...")
             self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))
 
             def f(ip_addr):
@@ -663,6 +688,7 @@ class TableApp(App):
             for t in tasks:
                 t.join()
             self.logger.info(f'Restarting apps has finished!')
+            self.update_status_widget(f"    App restart action completed!")
         finally:
             self.restart_app_in_progress = False
             self.logger.info(f'self.restart_app_in_progress = False')
@@ -676,6 +702,7 @@ class TableApp(App):
         print("RESTARTING ADB on selected devices!")
         table = self.query_one(SelectableRowsDataTable)
         selected_device_ip_addrs = [row.data[1] for row in table.selected_rows]
+        self.update_status_widget(f"    Restarting adb on {len(selected_device_ip_addrs)} devices...")
         self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))     
 
         def run_adb_cmd(ip_addr):
@@ -689,6 +716,7 @@ class TableApp(App):
             t.start()
         
         print('FINISHED dispatching adb restart threads!')
+        self.update_status_widget(f"    adb restart action completed!")
 
     @work(exclusive=True, thread=True)
     def action_stop_all_offsets(self) -> None:
@@ -711,7 +739,7 @@ class TableApp(App):
             description="Save Recording"), 
         Binding(key="u", action="recording_stop_and_discard", 
            description="Cancel Recording"), 
-        Binding(key="o", action="stop_all_offsets", description="Stop offsets logging on all devices"),
+        *([Binding(key="o", action="stop_all_offsets", description="Stop offsets logging on all devices")] if config["single_session_mode"] else []),
         Binding(key="t", action="restart_app_on_devices", description="Restart App"),
         Binding(key="a", action="reconnect_adb", description="Reconnect adb"),
         Binding(key="d", action="toggle_dark", description="Toggle dark mode"),
@@ -725,6 +753,7 @@ class TableApp(App):
         """
         yield SelectableRowsDataTable()
         yield Input(id = "event_tag", placeholder="Enter event tag/desc. here and press enter to log the event.", tooltip = "Use Tab to change focus")
+        yield Label(self.status_messages[0])
         yield Footer(id = "footer")
 
 def as_colored_text(val, **kwargs):

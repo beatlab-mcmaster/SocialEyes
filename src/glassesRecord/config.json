@@ -1,24 +1,25 @@
 {
     
-    "network_id": "192.168.2",
+    "network_id": "",
     "host_id": {
         "start": 101,
         "end": 130
     },
     "ip_list": [
-        "192.168.2.105",
-        "192.168.2.110",
+        "192.168.50.191",
+        "192.168.50.130",
         "192.168.2.124",
         "192.168.2.016"
     ],
     "logs": {
         "path": "logs/",
         "level": "INFO",
-        "interval": 10
+        "interval": 10,
+        "TUI_messages_len": 3
     },
     "update_times": {
         "batch1": 3,
         "batch2": 5
     },
-    "single_session_mode": true
+    "single_session_mode": false
 }

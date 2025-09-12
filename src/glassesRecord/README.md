@@ -78,6 +78,7 @@ The following parameters can be set in config.json to configure your recording s
         - `"path"`: Directory where log files will be stored.
         - `"level"`: Logging verbosity (e.g., `"INFO"`, `"DEBUG"`).
         - `"interval"`: Time interval (in seconds) for periodic logging or updates.
+        - `"TUI_messages_len"`: The maximum number of recent logs displayed in the TUI. Only the last `TUI_messages_len` messages will be shown at any time.
 
     - The `"single_session_mode"` option controls whether the recording session will involve a single recording start (and stop) for all releavant devices (`true`) OR it requires multiple concurrent recording starts with different batches of devices (`false`). 
 

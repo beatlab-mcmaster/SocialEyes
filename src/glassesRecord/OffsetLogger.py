@@ -27,7 +27,7 @@ class OffsetLogger:
             log_interval (int, optional): Time in seconds between logging offsets. Default is 10 seconds.
         """
         
-        os.makedirs("logs", exist_ok=True)
+        os.makedirs(log_dir, exist_ok=True)
         self.log_file = os.path.join(log_dir, f"{datetime.now().strftime('%y%m%dT%H%M%S')}_offsets.csv")
         print(os.path.abspath(self.log_file))
         self.log_interval = log_interval
