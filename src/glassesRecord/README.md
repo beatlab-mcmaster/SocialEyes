@@ -23,7 +23,7 @@ To summarize the important steps:
     - Open the terminal or command prompt and run:
 
             ```
-            adb tcpip 5555
+            adb -d tcpip 5555
             adb connect <device_ip>:5555
             ```
         Replace <device_ip> with the IP address of your device. You can find the device's IP address in the device's Wi-Fi settings.
