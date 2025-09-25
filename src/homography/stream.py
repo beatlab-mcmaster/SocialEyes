@@ -23,7 +23,7 @@ class Stream:
         curr_video_file (str): Name of the current video file being processed.
      """
 
-     def __init__(self, vid_path, resize_res):
+     def __init__(self, vid_path, resize_res=None):
         """
         Initializes the Stream object with a video path and resize resolution.
 
@@ -33,7 +33,9 @@ class Stream:
         """      
         
         self.vid_path = vid_path
-        self.resize_res = (resize_res[0], resize_res[1])
+        self.resize_res = resize_res
+        if self.resize_res:
+            self.resize_res = (int(resize_res[0]), int(resize_res[1]))
         self.curr_length = 0
         if isinstance(vid_path, list) and len(self.vid_path) > 0:
             self._chunks = True    
@@ -71,8 +73,9 @@ class Stream:
                 - gray (numpy.ndarray): The resized grayscale frame.
                 - scales (tuple): Scaling factors for width and height (original_width / new_width, original_height / new_height).
         """
-        w, h = image.shape[1], image.shape[0]    
-        image = cv2.resize(image, self.resize_res, cv2.INTER_AREA)
+        w, h = image.shape[1], image.shape[0]
+        if self.resize_res:
+            image = cv2.resize(image, self.resize_res, cv2.INTER_AREA)
         w_new, h_new = image.shape[1], image.shape[0]
         scales = (float(w) / float(w_new), float(h) / float(h_new))
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)

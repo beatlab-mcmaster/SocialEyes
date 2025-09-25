@@ -286,7 +286,7 @@ def gaze_derivatives(data, x_col, y_col, ts_col="timestamp_corrected"):
 
     return velocity.abs().mean(), acceleration.abs().mean(), jerk.abs().mean(), velocity, acceleration, jerk
 
-def std_2D(data, x_col, y_col):
+def std_2D(data, x_col, y_col, return_mean = False):
     """
     Calculate the spread of points in a 2D space using the standard deviation of Euclidean distances from each point to the mean point.
 
@@ -298,24 +298,34 @@ def std_2D(data, x_col, y_col):
         Name of the column containing x-coordinates.
     y_col : str
         Name of the column containing y-coordinates.
+    return_mean : bool, default=False
+        If True, also return the mean x and y coordinates of the points.
 
     Returns
     -------
     float
         Standard deviation of Euclidean distances from each point to the mean point.
         Returns NaN if fewer than 2 valid points are provided.
+    tuple (float, float, float), optional
+        If `return_mean` is True, returns a tuple containing:
+        - Standard deviation of distances
+        - Mean x-coordinate
+        - Mean y-coordinate
     """
     pts = data[[x_col, y_col]].dropna().values
     num_points = len(pts)
 
     if num_points < 2:
         return np.nan
-    
+
     # Euclidean distances to mean point
     x_mean, y_mean = pts.mean(axis=0)
     distances = [distance.euclidean([x_mean, y_mean], [x, y]) for x, y in pts]
+    if return_mean:
+        return statistics.stdev(distances), x_mean, y_mean
+    else:
+        return statistics.stdev(distances)
 
-    return statistics.stdev(distances)
 
 def convex_hull(data, x_col, y_col, max_peri=None, max_area=None):
     """
