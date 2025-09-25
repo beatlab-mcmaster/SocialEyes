@@ -80,6 +80,24 @@ class Stream:
         scales = (float(w) / float(w_new), float(h) / float(h_new))
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         return image, gray, scales
+     
+     def get_props(self):
+        """
+        Retrieves properties of the current video stream.
+
+        Returns:
+            dict: A dictionary containing video properties such as FPS, width, height, and total frame count.
+        """
+
+        frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = self.cap.get(cv2.CAP_PROP_FPS)
+        return {
+            "width": int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            "height": int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+            "fps": fps,
+            "frame_count": frame_count,
+            "duration":  frame_count/ fps if fps > 0 else 0
+        }
 
      def next_frame(self, seek=0):
         """
@@ -96,30 +114,32 @@ class Stream:
             Exception: If unable to read the next frame.
         """
         ## Seek video stream if required
-        if self._chunks:
-            total = 0
-            for i, vid in enumerate(self.vid_path):
-                cap = cv2.VideoCapture(vid)
-                max_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                cap.release()
-                if seek <= total + max_length:
-                    # Reset and restart generator from current video
+        if seek > 0:
+            if self._chunks:
+                total = 0
+                for i, vid in enumerate(self.vid_path):
+                    cap = cv2.VideoCapture(vid)
+                    max_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    cap.release()
+                    if seek <= total + max_length:
+                        # Reset and restart generator from current video
+                        self.close()
+                        self._gen = self._cap_gen(self.vid_path[i:])  
+                        self.cap = next(self._gen)
+                        #seek to the correct frame in the current video
+                        self.curr_length = seek-total-1
+                        if self.curr_length > 0:
+                            self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.curr_length)
+                        break
+                    total += max_length
+                if i == len(self.vid_path) - 1 and seek > total + max_length:
+                    raise Exception(f"Seek position {seek} exceeds total frames in chunked videos.")
+            else:
+                if seek > self.max_length:
                     self.close()
-                    self._gen = self._cap_gen(self.vid_path[i:])  
-                    self.cap = next(self._gen)
-                    #seek to the correct frame in the current video
-                    self.curr_length = seek-total-1
-                    if self.curr_length > 0:
-                        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.curr_length)
-                    break
-                total += max_length
-            if i == len(self.vid_path) - 1 and seek > total + max_length:
-                raise Exception(f"Seek position {seek} exceeds total frames in chunked videos.")
-        else:
-            if seek > self.max_length:
-                raise Exception(f"Seek position {seek} exceeds total frames {self.max_length}.")
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, seek - 1)
-            self.curr_length = seek-1
+                    raise Exception(f"Seek position {seek} exceeds total frames {self.max_length}.")
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, seek - 1)
+                self.curr_length = seek-1
         
         ## Read the next frame
         ret, image = self.cap.read()
