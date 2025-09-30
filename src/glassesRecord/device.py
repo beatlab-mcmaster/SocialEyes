@@ -241,7 +241,7 @@ class Device():
         Updates the `_ping` attribute with the average time in milliseconds or sets it to None if there is no response.
         Logs a message if the ping value changes to None.
         """
-        res = subprocess.getoutput(f'ping -c 3 -W 3 {self.ip_addr}') # 3 ping requests, wait up to 3s for responses
+        res = subprocess.getoutput(f'ping -c 1 -W 1 {self.ip_addr}') # 3 ping requests, wait up to 3s for responses
         re_search = re.findall('ttl=\d+\s+time=([0-9.]+)\s+ms', res)        
         if re_search is None or len(re_search) == 0:
             if self._ping is not None:

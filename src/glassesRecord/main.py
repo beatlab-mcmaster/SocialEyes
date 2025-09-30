@@ -470,8 +470,7 @@ class TableApp(App):
             dict: The JSON response from the recording API, if successful.
         """
         res = None
-        self.unlock_phone(ip_addr)
-        time.sleep(3)
+        # self.unlock_phone(ip_addr); time.sleep(3) ## PL Neon can now record audio on locked devices so this is not required anymore
 
         try:
             self.logger.info(f'Start recording on {ip_addr}')
@@ -676,7 +675,7 @@ class TableApp(App):
                 self.logger.info(f'Restarting app on {ip_addr}...')
                 adb_wrapper = AdbWrapper(ip_addr)
                 adb_wrapper.stop_neon_companion_app()
-                adb_wrapper.start_neon_companion_app()
+                adb_wrapper.start_neon_companion_app(wait_until_started=False)
                 self.logger.info(f'Restarting app on {ip_addr} has finished!')
             
             tasks = []
