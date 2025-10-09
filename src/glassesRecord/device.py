@@ -416,10 +416,16 @@ class Device():
             self._adb_df_threw_an_exception = False
 
         if len(output_lines) > 0:
-            search = re.search('\s+(\d+)\s+[\d.]+%', output_lines[1])
             result = None
-            if search is not None:
-                result = int(int(search.groups()[0]) / 1000 / 1000) # Kilobytes to Gigabytes
+
+            if len(output_lines) >= 2 and "Available" in output_lines[0]:
+                # Expected output:
+                # Filesystem     1K-blocks     Used Available Use% Mounted on
+                # /dev/fuse      237327340 26193832 211002436  12% /storage/emulated
+                search = re.search('\s+(\d+)\s+[\d.]+%', output_lines[1])
+                
+                if search is not None:
+                    result = int(int(search.groups()[0]) / 1000 / 1000) # Kilobytes to Gigabytes
         
         if self._free_disk_space is not None and result is None:
             self._logger.info('Free disk space value changed to None.')
@@ -456,7 +462,7 @@ class Device():
         
         rec_state = None
 
-        if any(['error' in l.lower() for l in res_lines]): # rec_state unknown
+        if "adb: " in res_lines[0] or any(['error' in l.lower() for l in res_lines]): # rec_state unknown
             self._logger.error(f'Cannot determine recording status: {res}')
             self._neon_companion_app_running_or_unsaved_recordings = {}
             rec_state = RecordingState.UNKNOWN
@@ -646,32 +652,34 @@ class Device():
         """
         indicators = {}
         device_timezone = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell getprop persist.sys.timezone')
-        device_tzinfo = pytz.timezone(device_timezone)
-        for rec_id,rec_obj in self._neon_companion_app_running_or_unsaved_recordings.items():
-            workspace_id = rec_obj['workspace_id']
-            res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell grep /storage/self/primary/Documents/Neon/{workspace_id}/{rec_id}/android.log -e 30s')
-            
-            indicators[rec_id] = []
-            
-            for line in res.splitlines():
-                re_search = re.search(f'(\d+-\d+ \d+:\d+:\d+.\d+).+({rec_id}.+)raw has not changed.+last size: (\d+)', line)
-                if re_search is None:
-                    continue
-                log_time, file, last_size = re_search.groups()
-                
-                log_time_datetime = datetime.strptime(log_time, '%m-%d %H:%M:%S.%f')
-                log_time_datetime.replace(year=self.now().year, tzinfo=device_tzinfo)
-                
-                file_name = html.unescape(file)
 
-                last_size = int(last_size)
+        if not any(e in device_timezone for e in ["adb:", "exception", "error"]):
+            device_tzinfo = pytz.timezone(device_timezone)
+            for rec_id,rec_obj in self._neon_companion_app_running_or_unsaved_recordings.items():
+                workspace_id = rec_obj['workspace_id']
+                res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell grep /storage/self/primary/Documents/Neon/{workspace_id}/{rec_id}/android.log -e 30s')
+                
+                indicators[rec_id] = []
+                
+                for line in res.splitlines():
+                    re_search = re.search(f'(\d+-\d+ \d+:\d+:\d+.\d+).+({rec_id}.+)raw has not changed.+last size: (\d+)', line)
+                    if re_search is None:
+                        continue
+                    log_time, file, last_size = re_search.groups()
+                    
+                    log_time_datetime = datetime.strptime(log_time, '%m-%d %H:%M:%S.%f')
+                    log_time_datetime.replace(year=self.now().year, tzinfo=device_tzinfo)
+                    
+                    file_name = html.unescape(file)
 
-                indicators[rec_id].append({
-                    'time': log_time_datetime,
-                    'file': file_name,
-                    'last_size': last_size
-                })
-        
+                    last_size = int(last_size)
+
+                    indicators[rec_id].append({
+                        'time': log_time_datetime,
+                        'file': file_name,
+                        'last_size': last_size
+                    })
+            
         if self._red_light_indicators != indicators:
             self._logger.info(f'Red light indicators have changed: {indicators}')
 
@@ -686,24 +694,28 @@ class Device():
         res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell cmd vibrator_manager dump | grep neon')
         vibration_requests = re.findall('createTime: (.+), .+endTime: (.+), .+, status: (.+), effect:', res)
         timezone = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell getprop persist.sys.timezone')
-        tzinfo = pytz.timezone(timezone)
         vibrator_events = []
-        for res in vibration_requests:
-            create_time, end_time, status = res
 
-            create_time_datetime = datetime.strptime(create_time, '%m-%d %H:%M:%S.%f')
-            create_time_datetime = create_time_datetime.replace(year=datetime.now().year, tzinfo=tzinfo)
-            end_time_datetime = datetime.strptime(end_time, '%m-%d %H:%M:%S.%f')
-            end_time_datetime = end_time_datetime.replace(year=datetime.now().year, tzinfo=tzinfo)
+        if not any(e in timezone for e in ["adb:", "exception", "error"]):
+            tzinfo = pytz.timezone(timezone)
+            
+            for res in vibration_requests:
+                create_time, end_time, status = res
 
-            vibrator_events.append({
-                'create_time': create_time_datetime,
-                'end_time': end_time_datetime,
-                'status': status
-            })
-        vibrator_events.sort(key=lambda e: e['create_time'], reverse=True)    
-        if vibrator_events != self._vibrator_events:
-            self._logger.info(f'Vibrator events have changed: {vibrator_events}')
+                create_time_datetime = datetime.strptime(create_time, '%m-%d %H:%M:%S.%f')
+                create_time_datetime = create_time_datetime.replace(year=datetime.now().year, tzinfo=tzinfo)
+                end_time_datetime = datetime.strptime(end_time, '%m-%d %H:%M:%S.%f')
+                end_time_datetime = end_time_datetime.replace(year=datetime.now().year, tzinfo=tzinfo)
+
+                vibrator_events.append({
+                    'create_time': create_time_datetime,
+                    'end_time': end_time_datetime,
+                    'status': status
+                })
+            vibrator_events.sort(key=lambda e: e['create_time'], reverse=True)    
+            if vibrator_events != self._vibrator_events:
+                self._logger.info(f'Vibrator events have changed: {vibrator_events}')
+        
         self._vibrator_events = vibrator_events
 
     def now(self):
