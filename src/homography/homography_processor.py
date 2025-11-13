@@ -158,7 +158,7 @@ class HomographyProcessor:
         These transformed gaze coordinates are then logged into a CSV File.
         """
         # Perform homography loop
-        for i,row in tqdm(self.merged_df.iterrows(), desc=id):
+        for i,row in tqdm(self.merged_df.iterrows(), desc=self.id):
             # Read frames from the glasses and central videos
             try:
                 image_g, gray_g, scales_g = self.glasses_cap.next_frame()
