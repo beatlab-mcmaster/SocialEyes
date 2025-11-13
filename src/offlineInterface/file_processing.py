@@ -10,7 +10,7 @@ import zipfile
 import json
 import re 
 from tqdm import tqdm
-import datetime
+from datetime import datetime
 import shutil
 
 try:
