@@ -32,7 +32,6 @@ To summarize the important steps:
             adb devices
             ```
 
-
 ## Usage
 
 1. Install the requirements with `pip install -r requirements.txt` 
@@ -41,11 +40,11 @@ To summarize the important steps:
 
 3. Configure other parameters in `config.json`. See the next section for parameter descriptions.
 
-4. Run the module with `python3 main.py` 
+4. Run the module with `python3 main.py` to start a new session.
 
 ## Config
 
-The following parameters can be set in config.json to configure your recording session:
+The following parameters should be set in config.json before starting a recording session with this module:
 
     - By default, SocialEyes will look for a range of IP addresses provided using the following config parameters:
 
@@ -105,6 +104,27 @@ The following parameters can be set in config.json to configure your recording s
         PL_Rec_Duration (Recording duration)
         Device (App device name/identifier)
         ```
+
+## Terminal User Interface (TUI)
+
+- The module interface is a TUI that lists of all eye-tracking devices on the local network
+    - Use Arrow up/down or mouse click to highlight a device
+- Colour-coded status metrics are shown for each device (battery/storage level, network ping, ADB server status, recording status, etc.)
+- Multiple devices can be selected from this list to perform a desirable action
+    -  Highlight a device and press `spacebar` to select.
+    -  Multiple devices can be selected/de-selected using Shift + arrow up/down.
+    -  To select all devices at once use Ctrl+A
+-  A list of possible actions is displayed at the bottom of the TUI. Press the key corresponding to an action to run the action on all selected devices.
+-  Note: If the ADB value for a device is False and ADB connection was initialised before running this module then use the "Reconnect adb" action.
+-  Each time an action is triggered, a message is logged under the devices list. Only the last 3 logs are displayed on the TUI at any point.
+-  Events can be created during a TUI session by pressing `Tab`. The event tag field will be active where a short event descriptor can be added. Press Enter to record the event and `Tab` again to go back to the device list. 
+
+## Stored data from a recording session
+
+- A new logs directory is created for each recording session--everytime the TUI is started.
+- Within this directory, a separate directory is created for each device that was used to record data during the session.
+    - Offsets from this device will be stored in the child csv.
+- An events.json file is created if events were created during the session. This file contains event descriptors and corresponding timestamps.
 
 ### Debugging and Logs
 - Run the following command to start the application in development mode: `textual run --dev main.py`
