@@ -1,6 +1,7 @@
-pupil_labs_realtime_api==1.3.6
+pupil_labs_realtime_api==1.7.3
 pytz
 questionary
+ipython
 requests
 rich
 textual
