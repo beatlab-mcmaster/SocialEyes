@@ -228,7 +228,7 @@ if __name__ == "__main__":
                     
                     #Adjust offsets
                     for file_path in tqdm(file_paths, desc = stream):
-                        dname = FileProcessor.device_name_from_path(file_path, true) #Device name in offset file is always stored as an IP address.
+                        dname = FileProcessor.device_name_from_path(file_path, True) #Device name in offset file is always stored as an IP address.
                         if dname == None:
                             print("Skipping, cannot convert to device name: ", file_path)
                             continue
