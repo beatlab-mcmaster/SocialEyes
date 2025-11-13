@@ -22,7 +22,7 @@ RECORDING = True
 
 def metrics_process(queue, output_dir):
     """
-    Separate process to log timestamps and frame data.
+    Separate process to log timestamps and frame data in standard camera setting. Timestamp_raw and timestamp_corrected are same in this setting at the moment. Timestamp_corrected should be appropriately adjusted if the raw timestamps for camera being used need to be modified to standard UNIX timestamps. See arducam implementation below in this file as an example.
 
     This function runs in a separate process to handle logging of frame-related metrics such as jitter and FPS.
     It continually retrieves frame data from a queue, processes it, and updates metrics in CSV files.
@@ -34,7 +34,7 @@ def metrics_process(queue, output_dir):
     central_metrics = CentralMetrics(os.path.join(output_dir,"central_metrics_new.csv"), 
                                     ["frame_count", "st. dev (jitter) [s]", "fps"], 
                                     os.path.join(output_dir,"central_timestamp.csv"), 
-                                    ["frame_count", "frame_fail_count", "timestamp [ns]"])
+                                    ["frame_count", "frame_fail_count", "timestamp_raw", "timestamp_corrected"])
     while True:
         try:
             frame_count, frame_fail_count, timestamp, window_size = queue.get()
@@ -168,7 +168,7 @@ def produce_arducam(camera, output_dir, frames_failed_threshold, scale_width = -
 
     #create timestamps csv
     central_metrics = CentralTimestampsOnly(os.path.join(output_dir,"central_timestamp.csv"), 
-                                    ["frame_count", "frame_fail_count", "timestamp [u64]", "timestamp_corrected"])
+                                    ["frame_count", "frame_fail_count", "timestamp_raw", "timestamp_corrected"])
 
     try:
         while True:

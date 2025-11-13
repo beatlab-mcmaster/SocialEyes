@@ -77,7 +77,7 @@ class CentralMetrics:
             window_size (int): The number of frames to consider for calculating metrics.
         """
         self.all_timestamps.append(timestamp)
-        self.central_timestamps_csv.writerow([frame_count, frame_fail_count, timestamp])
+        self.central_timestamps_csv.writerow([frame_count, frame_fail_count, timestamp, timestamp])
         # Only start calculating differences between timestamps once more than one frame has been received
         if len(self.all_timestamps) > 1:
             timestamp_diff = self.all_timestamps[len(self.all_timestamps)-1] - self.all_timestamps[len(self.all_timestamps)-2]
