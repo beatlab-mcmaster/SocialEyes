@@ -1,6 +1,6 @@
 {
     "paths": {
-        "worldview_video_filename" : "Neon Scene Camera v1 ps1.mp4",
+        "worldview_video_filename_re" : "Neon Scene Camera v1 ps[0-9]+\\.mp4",
         "worldview_csv_filename" : "world.csv",
         "gaze_csv_filename" : "gaze.csv",
         "blinks_csv_filename" : "blinks.csv",
@@ -14,6 +14,6 @@
     "defaults": {
         "network_id": "192.168.2",
         "offset": 100,
-        "device_name_as_ip": false
+        "device_name_as_ip": true
     }
 }
