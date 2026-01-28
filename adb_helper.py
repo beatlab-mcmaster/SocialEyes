@@ -20,22 +20,25 @@ from typing import Optional, List, Tuple
 
 def find_adb():
     """Find ADB executable (cross-platform)."""
-    # Try PATH first
+    # Check ANDROID_PLATFORM_TOOLS environment variable first
+    if "ANDROID_PLATFORM_TOOLS" in os.environ:
+        tools_dir = os.environ["ANDROID_PLATFORM_TOOLS"]
+        adb_name = "adb.exe" if platform.system() == "Windows" else "adb"
+        adb_path = os.path.join(tools_dir, adb_name)
+        if os.path.exists(adb_path):
+            return adb_path
+    
+    # Try PATH
     adb = shutil.which("adb")
     if adb:
         return adb
 
-    # Check common Windows installation paths
-    if platform.system() == "Windows":
-        common_paths = [
-            os.path.join("D:\\", "platform-tools", "adb.exe"),
-            os.path.join("C:\\", "platform-tools", "adb.exe"),
-            os.path.expanduser(os.path.join("~", "AppData", "Local", "Android", "Sdk", "platform-tools", "adb.exe")),
-            os.path.expanduser(os.path.join("~", ".android", "platform-tools", "adb.exe")),
-        ]
-        for path in common_paths:
-            if os.path.exists(path):
-                return path
+    # Check user directory regardless of OS (where quickstart.py downloads to)
+    adb_name = "adb.exe" if platform.system() == "Windows" else "adb"
+    user_tools_dir = os.path.expanduser(os.path.join("~", ".android", "platform-tools"))
+    user_adb_path = os.path.join(user_tools_dir, adb_name)
+    if os.path.exists(user_adb_path):
+        return user_adb_path
 
     return None
 
@@ -256,11 +259,17 @@ def main():
 
     if not adb_path:
         print("❌ ADB executable not found")
-        print("\nPlease install Android SDK Platform Tools:")
-        print("  - Windows: https://developer.android.com/studio/releases/platform-tools")
-        print("  - macOS: brew install android-platform-tools")
-        print("  - Linux: sudo apt install adb")
-        print("\nOr set ANDROID_SDK_ROOT environment variable")
+        print("\nTried the following locations:")
+        print("  1. ANDROID_PLATFORM_TOOLS environment variable")
+        print("  2. System PATH")
+        print("  3. ~/.android/platform-tools/adb")
+        print("  4. Android SDK installation directories")
+        print("\nTo fix this:")
+        print("  • Option A: Set environment variable:")
+        print("    export ANDROID_PLATFORM_TOOLS=/path/to/platform-tools")
+        print("  • Option B: Install Android SDK Platform Tools:")
+        print("    https://developer.android.com/tools/releases/platform-tools")
+        print("  • Option C: Run 'python quickstart.py' to auto-download ADB")
         sys.exit(1)
 
     print(f"Found ADB: {adb_path}\n")
