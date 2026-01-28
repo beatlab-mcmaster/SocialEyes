@@ -108,8 +108,7 @@ def check_docker() -> Tuple[bool, Optional[str]]:
     docker_path = find_executable("docker")
 
     if not docker_path:
-        print_warn("Docker not found")
-        print_info("Install Docker from: https://www.docker.com/products/docker-desktop/")
+        print_error("Docker not found")
         return False, None
 
     print_ok(f"Docker found: {docker_path}")
