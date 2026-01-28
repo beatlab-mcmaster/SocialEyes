@@ -352,7 +352,7 @@ def build_docker_image() -> bool:
 
     print_info("Building image (this may take 5-15 minutes on first build)...\n")
 
-    success, output = run_command(["docker", "build", "-t", "socialeyes-img", "."], capture=True)
+    success, output = run_command(["docker", "build", "-t", "socialeyes-img", "."], capture=True, timeout=None)
 
     if success:
         print_ok("Docker image built successfully")
