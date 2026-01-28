@@ -107,7 +107,7 @@ To ensure dependencies are properly managed, we recommend creating a separate Py
 
 ## Quick start
 
-**Clone the repository and run the quickstart wizard:**
+**Clone the repository and run the quickstart script:**
 
 ```bash
 git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes
@@ -115,13 +115,11 @@ cd SocialEyes
 python3 quickstart.py
 ```
 
-The quickstart wizard will:
+The quickstart script will:
 - Validate your environment (Python 3.10+, Docker, Git submodules)
 - Download ADB if needed (Windows/macOS/Linux)
 - Build the Docker image
 - Provide a menu to launch the demo or ADB helper
-
-That's it! The demo provides access to the three main operator interfaces in SocialEyes recording mode:
 
 ## Interfaces 
 

@@ -474,8 +474,8 @@ def print_next_steps() -> str:
 
     print(f"{Colors.BOLD}What would you like to do?{Colors.ENDC}\n")
 
-    print("  [1] Start demo in Docker")
-    print("  [2] Use ADB Helper")
+    print("  [1] Run the demo in Docker")
+    print("  [2] Connect phones via ADB")
     print("  [3] Exit")
 
     print()
@@ -554,7 +554,7 @@ def main():
                 .lower()
             )
             if response != "y":
-                print("\n✓ Thank you for using SocialEyes!")
+                print("\n✓ Exiting SocialEyes quickstart")
                 break
 
     except KeyboardInterrupt:

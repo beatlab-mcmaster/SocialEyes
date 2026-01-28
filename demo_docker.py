@@ -73,60 +73,57 @@ def start_docker():
     return False
 
 
-def find_adb_windows():
-    """Find ADB executable on Windows (platform-specific)."""
-    # Check common installation paths
-    common_paths = [
-        os.path.join("D:\\", "platform-tools", "adb.exe"),
-        os.path.join("C:\\", "platform-tools", "adb.exe"),
-        os.path.expanduser(os.path.join("~", "AppData", "Local", "Android", "Sdk", "platform-tools", "adb.exe")),
-        os.path.expanduser(os.path.join("~", ".android", "platform-tools", "adb.exe")),
-    ]
-
-    for path in common_paths:
-        if os.path.exists(path):
-            return path
+def find_adb():
+    """Find ADB executable (cross-platform)."""
+    # Check ANDROID_PLATFORM_TOOLS environment variable
+    if "ANDROID_PLATFORM_TOOLS" in os.environ:
+        adb_name = "adb.exe" if platform.system() == "Windows" else "adb"
+        adb_path = os.path.join(os.environ["ANDROID_PLATFORM_TOOLS"], adb_name)
+        if os.path.exists(adb_path):
+            return adb_path
 
     # Try PATH
     adb = shutil.which("adb")
     if adb:
         return adb
 
+    # Check user directory (where quickstart.py downloads to)
+    adb_name = "adb.exe" if platform.system() == "Windows" else "adb"
+    user_adb_path = os.path.expanduser(os.path.join("~", ".android", "platform-tools", adb_name))
+    if os.path.exists(user_adb_path):
+        return user_adb_path
+
     return None
 
 
 def start_adb_server():
-    """Start ADB server if on Windows host (Docker needs to connect to it)."""
-    system = platform.system()
+    """Start ADB server (cross-platform)."""
+    print("2) Starting ADB server...")
 
-    if system == "Windows":
-        adb_path = find_adb_windows()
-        if not adb_path:
-            print("⚠️  ADB not found. Docker may fail to connect to host ADB server.")
-            print("   Consider setting ANDROID_SDK_ROOT or installing Android SDK Platform Tools.")
-            return False
+    adb_path = find_adb()
+    if not adb_path:
+        print("❌  ADB not found!")
+        return False
 
-        print("2) Starting ADB server...")
-        try:
-            subprocess.run([adb_path, "start-server"], check=True, capture_output=True)
-            print("   ✓ ADB server started")
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to start ADB server: {e}")
-            return False
-    else:
-        # On macOS/Linux, ADB typically runs inside container
-        print("2) Skipping ADB server startup (running on non-Windows host)")
+    try:
+        subprocess.run([adb_path, "start-server"], check=True, capture_output=True, timeout=10)
+        print(f"   ✓ ADB server started ({adb_path})")
         return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌  Failed to start ADB server: {e}")
+        return False
+    except subprocess.TimeoutExpired:
+        print("❌  ADB server startup timed out")
+        return False
+    except Exception as e:
+        print(f"❌  Error starting ADB server: {e}")
+        return False
 
 
 def run_demo():
     """Run SocialEyes demo in Docker container."""
     print("\n3) Starting SocialEyes demo...")
     print("   (Press Ctrl+C to exit)\n")
-
-    env_vars = os.environ.copy()
-    env_vars["ANDROID_ADB_SERVER_ADDRESS"] = "host.docker.internal"
 
     docker_cmd = [
         "docker",
@@ -145,7 +142,7 @@ def run_demo():
     ]
 
     try:
-        subprocess.run(docker_cmd, env=env_vars, check=True)
+        subprocess.run(docker_cmd, check=True)
     except KeyboardInterrupt:
         print("\n\n   Demo interrupted by user - stopping container...")
         # Docker will clean up the container due to --rm flag
@@ -178,7 +175,7 @@ def main():
 
     # Step 2: Start ADB server (Windows only)
     if not start_adb_server():
-        print("\n⚠️  Warning: ADB server may not be available")
+        print("\n❌  Warning: ADB server may not be available")
 
     # Step 3: Run demo
     success = run_demo()
@@ -186,8 +183,7 @@ def main():
     if success:
         print("\n✓ Demo completed successfully")
     else:
-        print("\n⚠️  Demo exited (check output above for details)")
-
+        print("\n❌  Demo exited (check output above for details)")
 
 if __name__ == "__main__":
     try:
