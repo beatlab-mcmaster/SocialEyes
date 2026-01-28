@@ -39,7 +39,7 @@ class AdbWrapper:
         """
         Validates the provided IP address and port number.
         """
-        if re.search("\d{3}\.\d{3}\.\d{3}\.\d{3}", self.ip_addr) is not None:
+        if re.search(r"\d{3}\.\d{3}\.\d{3}\.\d{3}", self.ip_addr) is not None:
             raise Exception("Adb ip_addr must be an IPv4 address!")
         if not isinstance(self.port, int) and self.port > 0:
             raise Exception("Adb port must be a positve integer!")
@@ -139,7 +139,7 @@ class AdbWrapper:
         start_time = datetime.now()
         while res is None and (datetime.now() - start_time) < timedelta(milliseconds=timeout_ms):
             _res = self._run_adb_shell_command("am stack list")
-            _res = re.search("taskId=(\d+): com.pupillabs.neoncomp", _res)
+            _res = re.search(r"taskId=(\d+): com.pupillabs.neoncomp", _res)
             if _res is None:
                 time.sleep(0.1)
             else: 

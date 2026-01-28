@@ -242,7 +242,7 @@ class Device():
         Logs a message if the ping value changes to None.
         """
         res = subprocess.getoutput(f'ping -c 1 -W 1 {self.ip_addr}') # 3 ping requests, wait up to 3s for responses
-        re_search = re.findall('ttl=\d+\s+time=([0-9.]+)\s+ms', res)        
+        re_search = re.findall(r'ttl=\d+\s+time=([0-9.]+)\s+ms', res)        
         if re_search is None or len(re_search) == 0:
             if self._ping is not None:
                 self._logger.info('Ping value changed to None.')
@@ -422,7 +422,7 @@ class Device():
                 # Expected output:
                 # Filesystem     1K-blocks     Used Available Use% Mounted on
                 # /dev/fuse      237327340 26193832 211002436  12% /storage/emulated
-                search = re.search('\s+(\d+)\s+[\d.]+%', output_lines[1])
+                search = re.search(r'\s+(\d+)\s+[\d.]+%', output_lines[1])
                 
                 if search is not None:
                     result = int(int(search.groups()[0]) / 1000 / 1000) # Kilobytes to Gigabytes
@@ -440,7 +440,7 @@ class Device():
         Updates the internal state and logs any changes in activity status.
         """
         res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell am stack list | grep neon')
-        re_search = re.search('taskId=(\d+)', res)      
+        re_search = re.search(r'taskId=(\d+)', res)      
 
         new_value = re_search is not None and len(re_search.groups()) == 1
         if self._neon_companion_app_is_active and new_value is False:
@@ -662,7 +662,7 @@ class Device():
                 indicators[rec_id] = []
                 
                 for line in res.splitlines():
-                    re_search = re.search(f'(\d+-\d+ \d+:\d+:\d+.\d+).+({rec_id}.+)raw has not changed.+last size: (\d+)', line)
+                    re_search = re.search(fr'(\d+-\d+ \d+:\d+:\d+.\d+).+({rec_id}.+)raw has not changed.+last size: (\d+)', line)
                     if re_search is None:
                         continue
                     log_time, file, last_size = re_search.groups()
