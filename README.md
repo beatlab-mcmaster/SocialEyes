@@ -112,7 +112,7 @@ To ensure dependencies are properly managed, we recommend creating a separate Py
 ```bash
 git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes
 cd SocialEyes
-python quickstart.py
+python3 quickstart.py
 ```
 
 The quickstart wizard will:

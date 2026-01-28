@@ -69,14 +69,14 @@ def print_info(text: str):
     print(f"{Colors.OKCYAN}ℹ {text}{Colors.ENDC}")
 
 
-def run_command(cmd, capture=False, check=True):
+def run_command(cmd, capture=False, check=True, timeout=5):
     """Run a shell command safely."""
     try:
         if capture:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=check)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=timeout)
             return result.returncode == 0, result.stdout + result.stderr
         else:
-            return subprocess.run(cmd, check=check).returncode == 0, ""
+            return subprocess.run(cmd, check=check, timeout=timeout).returncode == 0, ""
     except subprocess.CalledProcessError as e:
         return False, str(e)
     except FileNotFoundError:
