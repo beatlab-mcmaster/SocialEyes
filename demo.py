@@ -27,7 +27,10 @@ if __name__ == "__main__":
                                     "Analyse data (Opens the Offline Interface to analyse and visualise collected data)"]).ask()
     
     #There are three main interfaces for SocialEyes: GlassesRecord TUI, CentralCam and Offline interface for analysis/visualisation. All these interfaces can be demoed through this tool below. 
-    if action.startswith("Collect eye-tracking data"):
+    if action is None:
+        print("No action selected. Exiting.")
+        sys.exit(0)
+    elif action.startswith("Collect eye-tracking data"):
         try:
             result = subprocess.run([sys.executable, "main.py"], check=True, cwd="src/glassesRecord/")
         except subprocess.CalledProcessError as e:
