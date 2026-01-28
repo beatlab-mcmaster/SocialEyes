@@ -8,13 +8,7 @@ This script guides users through the setup process, detecting missing dependenci
 offering to download/install them, and validating the environment before allowing
 the user to proceed with the demo.
 
-Features:
-- Python version check
-- Docker detection and build
-- ADB auto-download (if missing)
-- Virtual environment setup
-- Dependency installation
-- Environment validation
+Author: Alex
 """
 
 import subprocess
@@ -90,16 +84,16 @@ def run_command(cmd, capture=False, check=True):
 
 
 def check_python_version() -> bool:
-    """Check if Python version is 3.9+."""
+    """Check if Python version is 3.10+."""
     print_step(1, "Checking Python version...")
     version = sys.version_info
     version_str = f"{version.major}.{version.minor}.{version.micro}"
 
-    if version.major >= 3 and version.minor >= 9:
+    if version.major >= 3 and version.minor >= 10:
         print_ok(f"Python {version_str} ✓")
         return True
     else:
-        print_error(f"Python {version_str} (requires 3.9+)")
+        print_error(f"Python {version_str} (requires 3.10+)")
         return False
 
 
@@ -126,63 +120,34 @@ def check_docker() -> Tuple[bool, Optional[str]]:
         print_ok("Docker daemon is running")
         return True, docker_path
     else:
-        print_warn("Docker daemon is not running")
-        system = platform.system()
-        if system == "Darwin":
-            print_info("Start Docker Desktop and run this script again")
-        elif system == "Windows":
-            print_info("Start Docker Desktop and run this script again")
         return False, docker_path
 
 
-def download_adb_windows() -> Optional[str]:
-    """Download ADB for Windows and extract it."""
-    print_info("Downloading Android SDK Platform Tools for Windows...")
-    print_info("Source: https://developer.android.com/tools/releases/platform-tools")
-
-    adb_url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
-    temp_dir = tempfile.gettempdir()
-    zip_path = os.path.join(temp_dir, "platform-tools.zip")
-
-    try:
-        urllib.request.urlretrieve(adb_url, zip_path)
-        print_ok("Downloaded platform-tools.zip")
-
-        # Extract to user's home directory
-        tools_dir = os.path.expanduser("~/.android/platform-tools")
-        os.makedirs(tools_dir, exist_ok=True)
-
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            # Extract and flatten: platform-tools/* -> ~/.android/platform-tools/
-            for member in zip_ref.namelist():
-                if member.startswith("platform-tools/"):
-                    # Remove 'platform-tools/' prefix
-                    target_path = os.path.join(
-                        tools_dir, member.replace("platform-tools/", "", 1)
-                    )
-                    if member.endswith("/"):
-                        os.makedirs(target_path, exist_ok=True)
-                    else:
-                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                        with zip_ref.open(member) as source, open(target_path, "wb") as target:
-                            target.write(source.read())
-
-        adb_exe = os.path.join(tools_dir, "adb.exe")
-        os.remove(zip_path)
-        print_ok(f"ADB installed to: {tools_dir}")
-        return adb_exe
-
-    except Exception as e:
-        print_error(f"Failed to download ADB: {e}")
+def download_adb() -> Optional[str]:
+    """Download and extract ADB for the current platform."""
+    system = platform.system()
+    
+    # Determine platform-specific URL and executable name
+    if system == "Windows":
+        adb_url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
+        adb_name = "adb.exe"
+        os_name = "Windows"
+    elif system == "Darwin":
+        adb_url = "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
+        adb_name = "adb"
+        os_name = "macOS"
+    elif system == "Linux":
+        adb_url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
+        adb_name = "adb"
+        os_name = "Linux"
+    else:
+        print_warn(f"Unknown operating system: {system}")
+        print_info("Visit: https://developer.android.com/tools/releases/platform-tools")
         return None
 
-
-def download_adb_macos() -> Optional[str]:
-    """Download ADB for macOS and extract it."""
-    print_info("Downloading Android SDK Platform Tools for macOS...")
+    print_info(f"Downloading Android SDK Platform Tools for {os_name}...")
     print_info("Source: https://developer.android.com/tools/releases/platform-tools")
 
-    adb_url = "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
     temp_dir = tempfile.gettempdir()
     zip_path = os.path.join(temp_dir, "platform-tools.zip")
 
@@ -207,52 +172,10 @@ def download_adb_macos() -> Optional[str]:
                         with zip_ref.open(member) as source, open(target_path, "wb") as target:
                             target.write(source.read())
 
-        # Make adb executable
-        adb_path = os.path.join(tools_dir, "adb")
-        os.chmod(adb_path, os.stat(adb_path).st_mode | stat.S_IEXEC)
-
-        os.remove(zip_path)
-        print_ok(f"ADB installed to: {tools_dir}")
-        return adb_path
-
-    except Exception as e:
-        print_error(f"Failed to download ADB: {e}")
-        return None
-
-
-def download_adb_linux() -> Optional[str]:
-    """Download ADB for Linux and extract it."""
-    print_info("Downloading Android SDK Platform Tools for Linux...")
-    print_info("Source: https://developer.android.com/tools/releases/platform-tools")
-
-    adb_url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
-    temp_dir = tempfile.gettempdir()
-    zip_path = os.path.join(temp_dir, "platform-tools.zip")
-
-    try:
-        urllib.request.urlretrieve(adb_url, zip_path)
-        print_ok("Downloaded platform-tools.zip")
-
-        # Extract to user's home directory
-        tools_dir = os.path.expanduser("~/.android/platform-tools")
-        os.makedirs(tools_dir, exist_ok=True)
-
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            for member in zip_ref.namelist():
-                if member.startswith("platform-tools/"):
-                    target_path = os.path.join(
-                        tools_dir, member.replace("platform-tools/", "", 1)
-                    )
-                    if member.endswith("/"):
-                        os.makedirs(target_path, exist_ok=True)
-                    else:
-                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                        with zip_ref.open(member) as source, open(target_path, "wb") as target:
-                            target.write(source.read())
-
-        # Make adb executable
-        adb_path = os.path.join(tools_dir, "adb")
-        os.chmod(adb_path, os.stat(adb_path).st_mode | stat.S_IEXEC)
+        # Make adb executable on Unix-like systems
+        adb_path = os.path.join(tools_dir, adb_name)
+        if system != "Windows":
+            os.chmod(adb_path, os.stat(adb_path).st_mode | stat.S_IEXEC)
 
         os.remove(zip_path)
         print_ok(f"ADB installed to: {tools_dir}")
@@ -266,6 +189,15 @@ def download_adb_linux() -> Optional[str]:
 def check_adb(offer_download=True) -> Tuple[bool, Optional[str]]:
     """Check if ADB is available or offer to download it."""
     print_step(3, "Checking ADB (Android SDK Platform Tools)...")
+
+    # Check ANDROID_PLATFORM_TOOLS environment variable first
+    if "ANDROID_PLATFORM_TOOLS" in os.environ:
+        tools_dir = os.environ["ANDROID_PLATFORM_TOOLS"]
+        adb_name = "adb.exe" if platform.system() == "Windows" else "adb"
+        adb_path = os.path.join(tools_dir, adb_name)
+        if os.path.exists(adb_path):
+            print_ok(f"ADB found via ANDROID_PLATFORM_TOOLS: {adb_path}")
+            return True, adb_path
 
     adb_path = find_executable("adb")
     if adb_path:
@@ -293,24 +225,14 @@ def check_adb(offer_download=True) -> Tuple[bool, Optional[str]]:
     ).strip().lower()
 
     if response == "y":
-        if system == "Windows":
-            adb_path = download_adb_windows()
-        elif system == "Darwin":
-            adb_path = download_adb_macos()
-        elif system == "Linux":
-            adb_path = download_adb_linux()
-        else:
-            print_warn(f"Unknown operating system: {system}")
-            print_info("Visit: https://developer.android.com/tools/releases/platform-tools")
-            return False, None
-
+        adb_path = download_adb()
         if adb_path and os.path.exists(adb_path):
             return True, adb_path
 
     return False, None
 
 
-def check_git_submodules() -> bool:
+def check_git_submodules():
     """Check if git submodules are initialized."""
     print_step(4, "Checking Git submodules...")
 
@@ -378,11 +300,15 @@ def setup_environment_check() -> bool:
         elif system == "Windows":
             print_info("Start Docker Desktop on Windows and run this script again:")
             print_info("  • Click Start menu and search for 'Docker Desktop'")
-            print_info("  • Or use: Start-Process 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'")
         else:
             print_info("Start the Docker daemon and run this script again:")
             print_info("  • systemctl start docker")
-            print_info("  • sudo service docker start")
+        print()
+        return False
+    else:
+        # Docker is not installed
+        print_error("Docker is required for this setup")
+        print_info("Install Docker from: https://www.docker.com/products/docker-desktop/")
         print()
         return False
 
@@ -396,30 +322,7 @@ def setup_environment_check() -> bool:
     print()
     print(f"Environment checks: {checks_passed}/{checks_total} passed")
 
-    return checks_passed >= 2  # Need at least Python + (Docker OR ADB)
-
-
-def choose_setup_mode() -> str:
-    """Let user choose between container or source setup."""
-    print_header("Setup Mode")
-
-    print("Choose how you want to run SocialEyes:\n")
-    print("  [1] Container (Docker) - Recommended for Windows/macOS")
-    print("      - Complete isolated environment")
-    print("      - Easier dependency management")
-    print("      - No local installation needed")
-    print()
-    print("  [2] Source - Recommended for Linux developers")
-    print("      - Direct Python execution")
-    print("      - Easier to debug and modify")
-    print("      - Requires local dependencies")
-    print()
-
-    while True:
-        choice = input("Enter your choice [1 or 2]: ").strip()
-        if choice in ["1", "2"]:
-            return "container" if choice == "1" else "source"
-        print_error("Invalid choice. Please enter 1 or 2.")
+    return checks_passed >= 4  # Need Python + Docker + ADB + Git submodules
 
 
 def install_requirements_source() -> bool:
@@ -482,18 +385,16 @@ def validate_source_installation() -> bool:
         return False
 
 
-def validate_container_installation() -> bool:
-    """Validate that Docker image is available."""
-    print_step(7, "Validating Docker image...")
-
+def validate_docker_image() -> bool:
+    """Check if Docker image is available, build if needed."""
     success, output = run_command(["docker", "image", "inspect", "socialeyes-img"], capture=True, check=False)
 
     if success:
-        print_ok("Docker image is ready")
+        print_ok("Docker image already exists")
         return True
     else:
-        print_error("Docker image not found")
-        return False
+        print_info("Docker image not found. Building now...")
+        return build_docker_image()
 
 
 def setup_source_mode() -> bool:
@@ -510,16 +411,9 @@ def setup_source_mode() -> bool:
 
 
 def setup_container_mode() -> bool:
-    """Setup and validate container mode."""
-    print_header("Setting Up Container Mode")
-
-    if not build_docker_image():
-        return False
-
-    if not validate_container_installation():
-        return False
-
-    return True
+    """Build and validate Docker image."""
+    print_header("Docker Setup")
+    return build_docker_image()
 
 
 def launch_demo_source() -> bool:
@@ -562,29 +456,17 @@ def launch_demo_container() -> bool:
         return False
 
 
-def print_next_steps(mode: str) -> str:
+def print_next_steps() -> str:
     """Print next steps and action menu, return user's choice."""
     print_header("Setup Complete! 🎉")
 
     print("You're ready to use SocialEyes!\n")
 
     print(f"{Colors.BOLD}Quick commands:{Colors.ENDC}")
-
-    if mode == "source":
-        print("  • Run the demo locally:")
-        print(f"    {Colors.OKCYAN}python demo.py{Colors.ENDC}")
-        print("  • Run the demo in Docker:")
-        print(f"    {Colors.OKCYAN}python demo_docker.py{Colors.ENDC}")
-        print("  • Connect phones for TCP/IP mode:")
-        print(f"    {Colors.OKCYAN}python adb_helper.py{Colors.ENDC}\n")
-
-    else:  # container
-        print("  • Run the demo in Docker:")
-        print(f"    {Colors.OKCYAN}python demo_docker.py{Colors.ENDC}")
-        print("  • Run the demo locally:")
-        print(f"    {Colors.OKCYAN}python demo.py{Colors.ENDC}")
-        print("  • Connect phones for TCP/IP mode:")
-        print(f"    {Colors.OKCYAN}python adb_helper.py{Colors.ENDC}\n")
+    print("  • Run the demo in Docker:")
+    print(f"    {Colors.OKCYAN}python demo_docker.py{Colors.ENDC}")
+    print("  • Connect phones via ADB:")
+    print(f"    {Colors.OKCYAN}python adb_helper.py{Colors.ENDC}\n")
 
     print(f"{Colors.BOLD}For more information:{Colors.ENDC}")
     print("  - See README.md for detailed documentation")
@@ -592,24 +474,17 @@ def print_next_steps(mode: str) -> str:
 
     print(f"{Colors.BOLD}What would you like to do?{Colors.ENDC}\n")
 
-    if mode == "container":
-        print("  [1] Start demo in Docker")
-        print("  [2] Start demo locally (source mode)")
-        print("  [3] Use ADB Helper (USB→TCP/IP)")
-        print("  [4] Exit")
-    else:
-        print("  [1] Start demo locally (source mode)")
-        print("  [2] Start demo in Docker")
-        print("  [3] Use ADB Helper (USB→TCP/IP)")
-        print("  [4] Exit")
+    print("  [1] Start demo in Docker")
+    print("  [2] Use ADB Helper")
+    print("  [3] Exit")
 
     print()
 
     while True:
-        choice = input("Enter your choice [1-4]: ").strip()
-        if choice in ["1", "2", "3", "4"]:
+        choice = input("Enter your choice [1-3]: ").strip()
+        if choice in ["1", "2", "3"]:
             return choice
-        print_error("Invalid choice. Please enter 1, 2, 3, or 4.")
+        print_error("Invalid choice. Please enter 1, 2, or 3.")
 
 
 def launch_connect_helper() -> bool:
@@ -632,26 +507,18 @@ def launch_connect_helper() -> bool:
         return False
 
 
-def handle_user_action(choice: str, setup_mode: str):
+def handle_user_action(choice: str):
     """Handle the user's chosen action."""
     actions = {
-        "container": {
-            "1": ("Start demo in Docker", lambda: launch_demo_container()),
-            "2": ("Start demo locally", lambda: launch_demo_source()),
-            "3": ("Start ADB Connect Helper", lambda: launch_connect_helper()),
-        },
-        "source": {
-            "1": ("Start demo locally", lambda: launch_demo_source()),
-            "2": ("Start demo in Docker", lambda: launch_demo_container()),
-            "3": ("Start ADB Connect Helper", lambda: launch_connect_helper()),
-        },
+        "1": ("Start demo in Docker", lambda: launch_demo_container()),
+        "2": ("Use ADB Helper", lambda: launch_connect_helper()),
     }
 
-    if choice == "4":
+    if choice == "3":
         print("\n✓ Exiting SocialEyes quickstart")
         return False
 
-    action_name, action_func = actions[setup_mode][choice]
+    action_name, action_func = actions[choice]
     print(f"\n{Colors.BOLD}→ {action_name}{Colors.ENDC}")
     return action_func()
 
@@ -664,25 +531,17 @@ def main():
             print_error("Environment validation failed. Please check the errors above.")
             sys.exit(1)
 
-        # Step 2: Choose setup mode
-        mode = choose_setup_mode()
+        # Step 2: Setup Docker (check/build image as needed)
+        if not validate_docker_image():
+            print_error("Docker image setup failed")
+            sys.exit(1)
 
-        # Step 3: Setup based on mode
-        if mode == "container":
-            if not setup_container_mode():
-                print_error("Container setup failed")
-                sys.exit(1)
-        else:
-            if not setup_source_mode():
-                print_error("Source setup failed")
-                sys.exit(1)
-
-        # Step 4: Print next steps and get user action
+        # Step 3: Show action menu
         while True:
-            choice = print_next_steps(mode)
-            handle_user_action(choice, mode)
+            choice = print_next_steps()
+            handle_user_action(choice)
             
-            if choice == "4":
+            if choice == "3":
                 break
             
             # Ask if user wants to do something else

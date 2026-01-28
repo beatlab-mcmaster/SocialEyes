@@ -5,7 +5,7 @@ adb_helper.py
 Cross-platform helper script to monitor USB-connected Android devices
 and automatically convert them to TCP/IP adb connections.
 
-Author: Alex (converted from PowerShell)
+Author: Alex
 """
 
 import subprocess
@@ -103,7 +103,7 @@ def check_and_handle_unauthorized(adb_path: str, device_id: str) -> bool:
     return True
 
 
-def get_connected_devices(adb_path: str) -> List[str]:
+def get_connected_devices(adb_path: str):
     """Get list of USB-connected device IDs."""
     success, output = run_adb_command(adb_path, ["devices"])
 
@@ -146,10 +146,10 @@ def enable_tcpip_on_device(adb_path: str, device_id: str) -> Tuple[bool, str]:
     success, output = run_adb_command(adb_path, ["-s", device_id, "tcpip", "5555"])
 
     if success:
-        print(f"   ✓ TCP/IP enabled on port 5555")
+        print(f"   ✓ TCP/IP mode enabled on port 5555")
         return True, ""
     else:
-        print(f"   ❌ Failed to enable TCP/IP: {output}")
+        print(f"   ❌ Failed to enable TCP/IP mode: {output}")
         return False, output
 
 
@@ -231,7 +231,7 @@ def monitor_devices(adb_path: str):
                     continue
 
                 # Step 2: Wait for device to restart and get IP
-                print("   Waiting for device to restart...")
+                print("   Initializing TCP/IP connection...")
                 time.sleep(2.5)  # Give device time to restart
 
                 ip_address = get_device_ip(adb_path, device_id)

@@ -107,54 +107,21 @@ To ensure dependencies are properly managed, we recommend creating a separate Py
 
 ## Quick start
 
-### **Automated Setup (Recommended for all platforms)**
+**Clone the repository and run the quickstart wizard:**
 
-For automatic environment validation, dependency installation, and setup guidance:
-
-1. Clone the repository:  
-   `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
-
-2. Navigate to the code directory:  
-   `cd SocialEyes`
-
-3. Run the quickstart wizard:  
-   `python quickstart.py`
-
-The quickstart will check your environment, download missing dependencies (like ADB), and guide you through container or source setup. It then provides access to the three main operator interfaces in SocialEyes recording mode.
-
----
-
-### **Manual Setup Using Container (Recommended for Windows and macOS)**
-
-For manual setup, build the Docker image:  
-   `docker build -t socialeyes-img .`
-   
-Then run the container in privileged mode to allow access to local machine resources (USB/camera/network):
 ```bash
-docker run --rm -it --privileged -v $(pwd):/SocialEyes socialeyes-img
+git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes
+cd SocialEyes
+python quickstart.py
 ```
-**Hint**: On Windows, use `${PWD}` in PowerShell instead of `$(pwd)`.
 
+The quickstart wizard will:
+- Validate your environment (Python 3.10+, Docker, Git submodules)
+- Download ADB if needed (Windows/macOS/Linux)
+- Build the Docker image
+- Provide a menu to launch the demo or ADB helper
 
-
-### **Manual Setup Using Source (Tested on Ubuntu 22.04.03 LTS, ADB v28, and Python 3.9+)**
-
-For manual setup from source:
-
-1. Clone the repository:  
-   `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
-
-2. Navigate to the code directory:  
-   `cd SocialEyes`
-
-3. Install the required dependencies:  
-   `pip install -r requirements.txt`
-
-4. Run the demo:  
-   `python demo.py`
-
-
-The quick start opens a demo script that links to the three main operator interfaces in SocialEyes recording mode, as defined below:
+That's it! The demo provides access to the three main operator interfaces in SocialEyes recording mode:
 
 ## Interfaces 
 
