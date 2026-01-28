@@ -69,10 +69,14 @@ def print_info(text: str):
     print(f"{Colors.OKCYAN}ℹ {text}{Colors.ENDC}")
 
 
-def run_command(cmd, capture=False, check=True, timeout=5):
+def run_command(cmd, capture=False, check=True, timeout=5, stream=False):
     """Run a shell command safely."""
     try:
-        if capture:
+        if stream:
+            # Stream output directly to console
+            result = subprocess.run(cmd, check=check, timeout=timeout)
+            return result.returncode == 0, ""
+        elif capture:
             result = subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=timeout)
             return result.returncode == 0, result.stdout + result.stderr
         else:
@@ -352,15 +356,15 @@ def build_docker_image() -> bool:
 
     print_info("Building image (this may take 5-15 minutes on first build)...\n")
 
-    success, output = run_command(["docker", "build", "-t", "socialeyes-img", "."], capture=True, timeout=None)
+    success, _ = run_command(["docker", "build", "-t", "socialeyes-img", "."], check=False, stream=True, timeout=None)
 
     if success:
+        print()
         print_ok("Docker image built successfully")
         return True
     else:
+        print()
         print_error("Failed to build Docker image")
-        print_info("Last error output:")
-        print(output[-500:] if len(output) > 500 else output)
         return False
 
 
