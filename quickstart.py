@@ -108,7 +108,6 @@ def check_docker() -> Tuple[bool, Optional[str]]:
     docker_path = find_executable("docker")
 
     if not docker_path:
-        print_error("Docker not found")
         return False, None
 
     print_ok(f"Docker found: {docker_path}")
