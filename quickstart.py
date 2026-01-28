@@ -22,7 +22,6 @@ import sys
 import platform
 import os
 import shutil
-import json
 import urllib.request
 import tempfile
 import zipfile
@@ -305,6 +304,12 @@ def setup_environment_check() -> bool:
     """Perform all environment checks."""
     print_header("SocialEyes Environment Setup & Validation")
 
+    # Verify we're in the repo root directory
+    if not os.path.exists("demo.py") and not os.path.exists("Dockerfile"):
+        print_error("This script must be run from the SocialEyes repository root directory")
+        print_info("Expected to find: demo.py, Dockerfile, requirements.txt")
+        return False
+
     checks_passed = 0
     checks_total = 4
 
@@ -374,13 +379,13 @@ def install_requirements_source() -> bool:
 
 def build_docker_image() -> bool:
     """Build the Docker image."""
-    print_step(5, "Building Docker image...")
+    print_step(6, "Building Docker image...")
 
     if not os.path.exists("Dockerfile"):
         print_error("Dockerfile not found")
         return False
 
-    print_info("This may take a few minutes on first build...")
+    print_info("Building image (this may take 5-15 minutes on first build)...\n")
 
     success, output = run_command(["docker", "build", "-t", "socialeyes-img", "."], capture=True)
 
@@ -389,13 +394,14 @@ def build_docker_image() -> bool:
         return True
     else:
         print_error("Failed to build Docker image")
-        print(output)
+        print_info("Last error output:")
+        print(output[-500:] if len(output) > 500 else output)
         return False
 
 
 def validate_source_installation() -> bool:
     """Validate that source installation is ready."""
-    print_step(6, "Validating source installation...")
+    print_step(7, "Validating source installation...")
 
     # Check if demo.py exists
     if not os.path.exists("demo.py"):
@@ -414,7 +420,7 @@ def validate_source_installation() -> bool:
 
 def validate_container_installation() -> bool:
     """Validate that Docker image is available."""
-    print_step(6, "Validating Docker image...")
+    print_step(7, "Validating Docker image...")
 
     success, output = run_command(["docker", "image", "inspect", "socialeyes-img"], capture=True, check=False)
 
@@ -452,30 +458,138 @@ def setup_container_mode() -> bool:
     return True
 
 
-def print_next_steps(mode: str):
-    """Print next steps for the user."""
+def launch_demo_source() -> bool:
+    """Launch demo in source mode."""
+    print_header("Launching Demo (Source Mode)")
+    print("Starting demo.py...\n")
+
+    if not os.path.exists("demo.py"):
+        print_error("demo.py not found")
+        return False
+
+    try:
+        subprocess.run([sys.executable, "demo.py"], check=False)
+        return True
+    except KeyboardInterrupt:
+        print("\n\nDemo stopped by user")
+        return True
+    except Exception as e:
+        print_error(f"Failed to launch demo: {e}")
+        return False
+
+
+def launch_demo_container() -> bool:
+    """Launch demo in container mode by invoking demo_docker.py."""
+    print_header("Launching Demo (Docker Mode)")
+    print("Starting demo in Docker container...\n")
+
+    if not os.path.exists("demo_docker.py"):
+        print_error("demo_docker.py not found")
+        return False
+
+    try:
+        subprocess.run([sys.executable, "demo_docker.py"], check=False)
+        return True
+    except KeyboardInterrupt:
+        print("\n\nDemo stopped by user")
+        return True
+    except Exception as e:
+        print_error(f"Failed to launch demo: {e}")
+        return False
+
+
+def print_next_steps(mode: str) -> str:
+    """Print next steps and action menu, return user's choice."""
     print_header("Setup Complete! 🎉")
 
     print("You're ready to use SocialEyes!\n")
 
+    print(f"{Colors.BOLD}Quick commands:{Colors.ENDC}")
+
     if mode == "source":
-        print(f"{Colors.BOLD}Next steps:{Colors.ENDC}")
-        print("  1. Run the demo:")
-        print(f"     {Colors.OKCYAN}python demo.py{Colors.ENDC}\n")
-        print("  2. Connect phones for TCP/IP mode (optional):")
-        print(f"     {Colors.OKCYAN}python start_connect_helper.py{Colors.ENDC}\n")
+        print("  • Run the demo locally:")
+        print(f"    {Colors.OKCYAN}python demo.py{Colors.ENDC}")
+        print("  • Run the demo in Docker:")
+        print(f"    {Colors.OKCYAN}python demo_docker.py{Colors.ENDC}")
+        print("  • Connect phones for TCP/IP mode:")
+        print(f"    {Colors.OKCYAN}python adb_helper.py{Colors.ENDC}\n")
 
     else:  # container
-        print(f"{Colors.BOLD}Next steps:{Colors.ENDC}")
-        print("  1. Run the demo:")
-        print(f"     {Colors.OKCYAN}python start_demo.py{Colors.ENDC}\n")
-        print("  2. Connect phones for TCP/IP mode (optional):")
-        print(f"     {Colors.OKCYAN}python start_connect_helper.py{Colors.ENDC}\n")
+        print("  • Run the demo in Docker:")
+        print(f"    {Colors.OKCYAN}python demo_docker.py{Colors.ENDC}")
+        print("  • Run the demo locally:")
+        print(f"    {Colors.OKCYAN}python demo.py{Colors.ENDC}")
+        print("  • Connect phones for TCP/IP mode:")
+        print(f"    {Colors.OKCYAN}python adb_helper.py{Colors.ENDC}\n")
 
     print(f"{Colors.BOLD}For more information:{Colors.ENDC}")
     print("  - See README.md for detailed documentation")
-    print("  - Visit: https://github.com/beatlab-mcmaster/SocialEyes")
+    print("  - Visit: https://github.com/beatlab-mcmaster/SocialEyes\n")
+
+    print(f"{Colors.BOLD}What would you like to do?{Colors.ENDC}\n")
+
+    if mode == "container":
+        print("  [1] Start demo in Docker")
+        print("  [2] Start demo locally (source mode)")
+        print("  [3] Use ADB Helper (USB→TCP/IP)")
+        print("  [4] Exit")
+    else:
+        print("  [1] Start demo locally (source mode)")
+        print("  [2] Start demo in Docker")
+        print("  [3] Use ADB Helper (USB→TCP/IP)")
+        print("  [4] Exit")
+
     print()
+
+    while True:
+        choice = input("Enter your choice [1-4]: ").strip()
+        if choice in ["1", "2", "3", "4"]:
+            return choice
+        print_error("Invalid choice. Please enter 1, 2, 3, or 4.")
+
+
+def launch_connect_helper() -> bool:
+    """Launch the ADB connect helper."""
+    print_header("Starting ADB Helper")
+    print("Monitoring for USB-connected devices...\n")
+
+    if not os.path.exists("adb_helper.py"):
+        print_error("adb_helper.py not found")
+        return False
+
+    try:
+        subprocess.run([sys.executable, "adb_helper.py"], check=False)
+        return True
+    except KeyboardInterrupt:
+        print("\n\nConnect helper stopped by user")
+        return True
+    except Exception as e:
+        print_error(f"Failed to launch connect helper: {e}")
+        return False
+
+
+def handle_user_action(choice: str, setup_mode: str):
+    """Handle the user's chosen action."""
+    actions = {
+        "container": {
+            "1": ("Start demo in Docker", lambda: launch_demo_container()),
+            "2": ("Start demo locally", lambda: launch_demo_source()),
+            "3": ("Start ADB Connect Helper", lambda: launch_connect_helper()),
+        },
+        "source": {
+            "1": ("Start demo locally", lambda: launch_demo_source()),
+            "2": ("Start demo in Docker", lambda: launch_demo_container()),
+            "3": ("Start ADB Connect Helper", lambda: launch_connect_helper()),
+        },
+    }
+
+    if choice == "4":
+        print("\n✓ Exiting SocialEyes quickstart")
+        return False
+
+    action_name, action_func = actions[setup_mode][choice]
+    print(f"\n{Colors.BOLD}→ {action_name}{Colors.ENDC}")
+    return action_func()
 
 
 def main():
@@ -499,8 +613,26 @@ def main():
                 print_error("Source setup failed")
                 sys.exit(1)
 
-        # Step 4: Print next steps
-        print_next_steps(mode)
+        # Step 4: Print next steps and get user action
+        while True:
+            choice = print_next_steps(mode)
+            handle_user_action(choice, mode)
+            
+            if choice == "4":
+                break
+            
+            # Ask if user wants to do something else
+            print()
+            response = (
+                input(
+                    f"{Colors.BOLD}Do something else? (y/n): {Colors.ENDC}"
+                )
+                .strip()
+                .lower()
+            )
+            if response != "y":
+                print("\n✓ Thank you for using SocialEyes!")
+                break
 
     except KeyboardInterrupt:
         print("\n\nSetup cancelled by user")

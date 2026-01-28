@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-start_demo.py
+demo_docker.py
 
 Cross-platform starter script for SocialEyes demo with Docker.
 Handles Docker startup, ADB server initialization, and demo execution.
@@ -77,9 +77,10 @@ def find_adb_windows():
     """Find ADB executable on Windows (platform-specific)."""
     # Check common installation paths
     common_paths = [
-        "D:\\platform-tools\\adb.exe",
-        "C:\\platform-tools\\adb.exe",
-        os.path.expanduser("~\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe"),
+        os.path.join("D:\\", "platform-tools", "adb.exe"),
+        os.path.join("C:\\", "platform-tools", "adb.exe"),
+        os.path.expanduser(os.path.join("~", "AppData", "Local", "Android", "Sdk", "platform-tools", "adb.exe")),
+        os.path.expanduser(os.path.join("~", ".android", "platform-tools", "adb.exe")),
     ]
 
     for path in common_paths:

@@ -107,7 +107,9 @@ To ensure dependencies are properly managed, we recommend creating a separate Py
 
 ## Quick start
 
-### **Using Container (Recommended for Windows and macOS)**
+### **Automated Setup (Recommended for all platforms)**
+
+For automatic environment validation, dependency installation, and setup guidance:
 
 1. Clone the repository:  
    `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
@@ -115,18 +117,29 @@ To ensure dependencies are properly managed, we recommend creating a separate Py
 2. Navigate to the code directory:  
    `cd SocialEyes`
 
-3. Build the Docker image:  
+3. Run the quickstart wizard:  
+   `python quickstart.py`
+
+The quickstart will check your environment, download missing dependencies (like ADB), and guide you through container or source setup. It then provides access to the three main operator interfaces in SocialEyes recording mode.
+
+---
+
+### **Manual Setup Using Container (Recommended for Windows and macOS)**
+
+For manual setup, build the Docker image:  
    `docker build -t socialeyes-img .`
    
-4. Mount your drive and run the container in privileged mode to allow access to local machine resources (USB/camera/network):
-    ```bash
-    docker run --rm -it --privileged -v $(pwd):/SocialEyes socialeyes-img
-    ```
-    **Hint**: On Windows, use `${PWD}` in PowerShell instead of `$(pwd)`.
+Then run the container in privileged mode to allow access to local machine resources (USB/camera/network):
+```bash
+docker run --rm -it --privileged -v $(pwd):/SocialEyes socialeyes-img
+```
+**Hint**: On Windows, use `${PWD}` in PowerShell instead of `$(pwd)`.
 
 
 
-### **Using Source (Tested on Ubuntu 22.04.03 LTS, ADB v28, and Python 3.9+)**
+### **Manual Setup Using Source (Tested on Ubuntu 22.04.03 LTS, ADB v28, and Python 3.9+)**
+
+For manual setup from source:
 
 1. Clone the repository:  
    `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
@@ -137,7 +150,7 @@ To ensure dependencies are properly managed, we recommend creating a separate Py
 3. Install the required dependencies:  
    `pip install -r requirements.txt`
 
-4. Run the demo script:  
+4. Run the demo:  
    `python demo.py`
 
 
