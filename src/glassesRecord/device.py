@@ -258,7 +258,7 @@ class Device():
         Logs a message if the battery level changes to None.
         """
         res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell dumpsys battery')
-        re_search = re.search('level:\s+(\d+)', res)        
+        re_search = re.search(r'level:\s+(\d+)', res)        
         if re_search is None:
             if self._battery_level is not None:
                 self._logger.info('Battery level value changed to None.')
