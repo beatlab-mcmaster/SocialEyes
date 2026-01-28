@@ -115,6 +115,7 @@ def check_docker() -> Tuple[bool, Optional[str]]:
 
     if not docker_path:
         print_warn("Docker not found")
+        print_info("Install Docker from: https://www.docker.com/products/docker-desktop/")
         return False, None
 
     print_ok(f"Docker found: {docker_path}")
@@ -136,7 +137,8 @@ def check_docker() -> Tuple[bool, Optional[str]]:
 
 def download_adb_windows() -> Optional[str]:
     """Download ADB for Windows and extract it."""
-    print_info("Downloading Android SDK Platform Tools...")
+    print_info("Downloading Android SDK Platform Tools for Windows...")
+    print_info("Source: https://developer.android.com/tools/releases/platform-tools")
 
     adb_url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
     temp_dir = tempfile.gettempdir()
@@ -178,8 +180,52 @@ def download_adb_windows() -> Optional[str]:
 def download_adb_macos() -> Optional[str]:
     """Download ADB for macOS and extract it."""
     print_info("Downloading Android SDK Platform Tools for macOS...")
+    print_info("Source: https://developer.android.com/tools/releases/platform-tools")
 
     adb_url = "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
+    temp_dir = tempfile.gettempdir()
+    zip_path = os.path.join(temp_dir, "platform-tools.zip")
+
+    try:
+        urllib.request.urlretrieve(adb_url, zip_path)
+        print_ok("Downloaded platform-tools.zip")
+
+        # Extract to user's home directory
+        tools_dir = os.path.expanduser("~/.android/platform-tools")
+        os.makedirs(tools_dir, exist_ok=True)
+
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            for member in zip_ref.namelist():
+                if member.startswith("platform-tools/"):
+                    target_path = os.path.join(
+                        tools_dir, member.replace("platform-tools/", "", 1)
+                    )
+                    if member.endswith("/"):
+                        os.makedirs(target_path, exist_ok=True)
+                    else:
+                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                        with zip_ref.open(member) as source, open(target_path, "wb") as target:
+                            target.write(source.read())
+
+        # Make adb executable
+        adb_path = os.path.join(tools_dir, "adb")
+        os.chmod(adb_path, os.stat(adb_path).st_mode | stat.S_IEXEC)
+
+        os.remove(zip_path)
+        print_ok(f"ADB installed to: {tools_dir}")
+        return adb_path
+
+    except Exception as e:
+        print_error(f"Failed to download ADB: {e}")
+        return None
+
+
+def download_adb_linux() -> Optional[str]:
+    """Download ADB for Linux and extract it."""
+    print_info("Downloading Android SDK Platform Tools for Linux...")
+    print_info("Source: https://developer.android.com/tools/releases/platform-tools")
+
+    adb_url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
     temp_dir = tempfile.gettempdir()
     zip_path = os.path.join(temp_dir, "platform-tools.zip")
 
@@ -226,8 +272,6 @@ def check_adb(offer_download=True) -> Tuple[bool, Optional[str]]:
         print_ok(f"ADB found: {adb_path}")
         return True, adb_path
 
-    print_warn("ADB not found in PATH")
-
     if not offer_download:
         return False, None
 
@@ -253,9 +297,11 @@ def check_adb(offer_download=True) -> Tuple[bool, Optional[str]]:
             adb_path = download_adb_windows()
         elif system == "Darwin":
             adb_path = download_adb_macos()
+        elif system == "Linux":
+            adb_path = download_adb_linux()
         else:
-            print_warn("Automatic ADB download not available for Linux")
-            print_info("Please install: sudo apt install adb")
+            print_warn(f"Unknown operating system: {system}")
+            print_info("Visit: https://developer.android.com/tools/releases/platform-tools")
             return False, None
 
         if adb_path and os.path.exists(adb_path):
@@ -321,6 +367,24 @@ def setup_environment_check() -> bool:
     docker_ok, docker_path = check_docker()
     if docker_ok:
         checks_passed += 1
+    elif docker_path:
+        # Docker is installed but daemon is not running
+        print_error("Docker daemon is not running")
+        system = platform.system()
+        if system == "Darwin":
+            print_info("Start Docker Desktop on macOS and run this script again:")
+            print_info("  • Click the Docker icon in Spotlight (Cmd+Space, type 'Docker')")
+            print_info("  • Or open: /Applications/Docker.app")
+        elif system == "Windows":
+            print_info("Start Docker Desktop on Windows and run this script again:")
+            print_info("  • Click Start menu and search for 'Docker Desktop'")
+            print_info("  • Or use: Start-Process 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'")
+        else:
+            print_info("Start the Docker daemon and run this script again:")
+            print_info("  • systemctl start docker")
+            print_info("  • sudo service docker start")
+        print()
+        return False
 
     adb_ok, adb_path = check_adb(offer_download=True)
     if adb_ok:
