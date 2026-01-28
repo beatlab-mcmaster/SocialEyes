@@ -50,7 +50,7 @@ def start_docker():
 
     elif system == "Windows":
         try:
-            subprocess.Popen("start docker desktop", shell=True)
+            subprocess.Popen("docker desktop start -d", shell=True)
         except Exception as e:
             print(f"❌ Failed to start Docker: {e}")
             return False
