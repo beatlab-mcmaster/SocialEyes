@@ -22,7 +22,11 @@ import zipfile
 import stat
 from pathlib import Path
 from typing import Tuple, Optional
-
+try:
+    from colorama import init
+    init(autoreset=True)
+except ImportError:
+    pass
 
 # Color codes for terminal output
 class Colors:
@@ -36,12 +40,19 @@ class Colors:
     BOLD = "\033[1m"
     UNDERLINE = "\033[4m"
 
+def get_terminal_width(default=70):
+    try:
+        return shutil.get_terminal_size().columns
+    except OSError:
+        return default
+
 
 def print_header(text: str):
     """Print a formatted header."""
-    print(f"\n{Colors.BOLD}{Colors.HEADER}{'=' * 70}{Colors.ENDC}")
-    print(f"{Colors.BOLD}{Colors.HEADER}{text:^70}{Colors.ENDC}")
-    print(f"{Colors.BOLD}{Colors.HEADER}{'=' * 70}{Colors.ENDC}\n")
+    width = get_terminal_width()
+    print(f"\n{Colors.BOLD}{Colors.HEADER}{'=' * width}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.HEADER}{text:^{width}}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.HEADER}{'=' * width}{Colors.ENDC}\n")
 
 
 def print_step(step: int, text: str):
