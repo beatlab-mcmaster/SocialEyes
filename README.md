@@ -107,41 +107,19 @@ To ensure dependencies are properly managed, we recommend creating a separate Py
 
 ## Quick start
 
-### **Using Container (Recommended for Windows and macOS)**
+**Clone the repository and run the quickstart script:**
 
-1. Clone the repository:  
-   `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
+```bash
+git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes
+cd SocialEyes
+python3 quickstart.py
+```
 
-2. Navigate to the code directory:  
-   `cd SocialEyes`
-
-3. Build the Docker image:  
-   `docker build -t socialeyes-img .`
-   
-4. Mount your drive and run the container in privileged mode to allow access to local machine resources (USB/camera/network):
-    ```bash
-    docker run --rm -it --privileged -v $(pwd):/SocialEyes socialeyes-img
-    ```
-    **Hint**: On Windows, use `${PWD}` in PowerShell instead of `$(pwd)`.
-
-
-
-### **Using Source (Tested on Ubuntu 22.04.03 LTS, ADB v28, and Python 3.9+)**
-
-1. Clone the repository:  
-   `git clone --recurse-submodules https://github.com/beatlab-mcmaster/SocialEyes.git SocialEyes`
-
-2. Navigate to the code directory:  
-   `cd SocialEyes`
-
-3. Install the required dependencies:  
-   `pip install -r requirements.txt`
-
-4. Run the demo script:  
-   `python demo.py`
-
-
-The quick start opens a demo script that links to the three main operator interfaces in SocialEyes recording mode, as defined below:
+The quickstart script will:
+- Validate your environment (Python 3.10+, Docker, Git submodules)
+- Download ADB if needed (Windows/macOS/Linux)
+- Build the Docker image
+- Provide a menu to launch the demo or ADB helper
 
 ## Interfaces 
 
