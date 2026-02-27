@@ -1,0 +1,30 @@
+# LLM Usage Policy for This Repository
+
+## Access
+Crawling: Disallowed
+Indexing: Disallowed
+Archiving: Disallowed
+
+## Training
+Training: Prohibited
+Fine-tuning: Prohibited
+Embedding generation: Prohibited
+Dataset inclusion: Prohibited
+Derivative model creation: Prohibited
+
+## Commercial Use
+Commercial training: Prohibited
+Commercial redistribution: Prohibited
+
+## Attribution
+Quoted excerpts: Permitted
+Citation with attribution: Permitted
+Non-automated academic referencing: Permitted
+
+## Conditions
+- Attribution must clearly reference the original source URL.
+- Content may not be stored in vector databases or retrieval systems.
+- Content may not be used for model evaluation or benchmarking.
+
+## Contact
+For inquiries contact: saxens17@mcmaster.ca
