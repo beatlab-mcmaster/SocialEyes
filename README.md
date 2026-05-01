@@ -23,7 +23,9 @@
 [![License: NCRL-1.0](https://img.shields.io/badge/License-NCRL--1.0-red)](./LICENSE) ![Ubuntu](https://img.shields.io/badge/OS-Ubuntu-orange?logo=ubuntu) ![Docker](https://img.shields.io/badge/Windows%20%26%20macOS-Using%20Docker-blue?logo=docker) [![Published in ACM SIGCHI](https://img.shields.io/badge/Published%20in-ACM%20SIGCHI-pink?logo=acm)](https://programs.sigchi.org/chi/2025/program/content/188227) 
 
 [![DOI](https://img.shields.io/badge/Paper-10.1145%2F3706598.3713910-002200)](https://dl.acm.org/doi/10.1145/3706598.3713910)
-[![DOI](https://img.shields.io/badge/Code-10.1145%2F3706598.3713910-002200)](https://doi.org/10.5281/zenodo.16581810)
+[![DOI](https://img.shields.io/badge/Code-10.1145%2F3706598.3713910-002200)](https://doi.org/10.5281/zenodo.17137736)
+
+
 
 <!-- [![Pull Requests welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg?style=flat-square)](https://github.com/beatlab-mcmaster/socialeyes/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) -->
 </div>
