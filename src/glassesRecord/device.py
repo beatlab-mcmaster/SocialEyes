@@ -7,7 +7,6 @@ Purpose: Implements the device class with Android Debug Bring (ADB) utility func
 
 import time
 import random
-import subprocess
 import re
 import threading
 import numpy as np
@@ -16,13 +15,13 @@ import requests
 import socket
 import copy
 import json
-import os
 import numpy as np
 import traceback
 import logging
 import pytz
 import html
-from enum import Enum 
+from enum import Enum
+from adb_utils import subprocess_getoutput
 
 class RecordingState(Enum):
     UNKNOWN = 0,
@@ -241,8 +240,8 @@ class Device():
         Updates the `_ping` attribute with the average time in milliseconds or sets it to None if there is no response.
         Logs a message if the ping value changes to None.
         """
-        res = subprocess.getoutput(f'ping -c 1 -W 1 {self.ip_addr}') # 3 ping requests, wait up to 3s for responses
-        re_search = re.findall(r'ttl=\d+\s+time=([0-9.]+)\s+ms', res)        
+        res = subprocess_getoutput(f'ping -c 1 -W 1 {self.ip_addr}') # 3 ping requests, wait up to 3s for responses
+        re_search = re.findall('ttl=\d+\s+time=([0-9.]+)\s+ms', res)        
         if re_search is None or len(re_search) == 0:
             if self._ping is not None:
                 self._logger.info('Ping value changed to None.')
@@ -257,8 +256,8 @@ class Device():
         If unable to retrieve the battery level, sets it to None.
         Logs a message if the battery level changes to None.
         """
-        res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell dumpsys battery')
-        re_search = re.search(r'level:\s+(\d+)', res)        
+        res = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell dumpsys battery')
+        re_search = re.search('level:\s+(\d+)', res)        
         if re_search is None:
             if self._battery_level is not None:
                 self._logger.info('Battery level value changed to None.')
@@ -273,7 +272,7 @@ class Device():
         Logs changes in connection status.
 
         """
-        res = subprocess.getoutput(f'adb devices | grep {self.ip_addr}')
+        res = subprocess_getoutput(f'adb devices | grep {self.ip_addr}')
         _adb_connection_is_established = res is not None and 'device' in res
         if res is None:
             if self._adb_connection_is_established is not None:
@@ -291,7 +290,7 @@ class Device():
         Updates the `_connected_usb_devices` attribute with the list of devices.
         Logs errors if an exception occurs during the command execution.
         """
-        output = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell dumpsys usb')
+        output = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell dumpsys usb')
         output_lines = [l.strip() for l in output.split("\n")]
 
         result = []
@@ -402,7 +401,7 @@ class Device():
 
         Logs changes in free disk space or errors if an exception occurs.
         """
-        output = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell df /storage/self/primary/Documents')
+        output = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell df /storage/self/primary/Documents')
         output_lines = [l.strip() for l in output.split("\n")]
         
         if any(['exception' in l.lower() for l in output_lines]):
@@ -422,7 +421,7 @@ class Device():
                 # Expected output:
                 # Filesystem     1K-blocks     Used Available Use% Mounted on
                 # /dev/fuse      237327340 26193832 211002436  12% /storage/emulated
-                search = re.search(r'\s+(\d+)\s+[\d.]+%', output_lines[1])
+                search = re.search('\s+(\d+)\s+[\d.]+%', output_lines[1])
                 
                 if search is not None:
                     result = int(int(search.groups()[0]) / 1000 / 1000) # Kilobytes to Gigabytes
@@ -439,8 +438,8 @@ class Device():
         Checks the stack of active apps on the device with ADB to see if the Neon app is listed as active.
         Updates the internal state and logs any changes in activity status.
         """
-        res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell am stack list | grep neon')
-        re_search = re.search(r'taskId=(\d+)', res)      
+        res = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell am stack list | grep neon')
+        re_search = re.search('taskId=(\d+)', res)      
 
         new_value = re_search is not None and len(re_search.groups()) == 1
         if self._neon_companion_app_is_active and new_value is False:
@@ -457,7 +456,7 @@ class Device():
         Logs changes in the recording state and the list of recordings.
         """
         base_dir = "/storage/self/primary/Documents/Neon/" # NB. trailing slash is part of this string
-        res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell find {base_dir} -name temp_*.json')
+        res = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell find {base_dir} -name temp_*.json')
         res_lines = res.split("\n")
         
         rec_state = None
@@ -480,7 +479,7 @@ class Device():
             for line in res_lines: # note: there can be one active recording, but multiple unsaved recordings
                 workspace_id, recording_id, _ = line[len(base_dir):].split('/')
 
-                mp4_filepaths = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell find {base_dir}{workspace_id}/{recording_id} -name *.mp4')
+                mp4_filepaths = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell find {base_dir}{workspace_id}/{recording_id} -name *.mp4')
                 mp4_filepaths = mp4_filepaths.split("\n") if len(mp4_filepaths) > 0 else []
                 
                 # Process mp4 files
@@ -489,7 +488,7 @@ class Device():
                     # Collect data on mp4 files
                     try:
                         fp = fp.replace(' ', '\\\\ ') # escape whitespace for adb shell cmd
-                        stats_result = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell stat -t {fp}').split(' ')
+                        stats_result = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell stat -t {fp}').split(' ')
                         *file_name_parts, size_bytes, _, _, _, _, _, _, _, _, _, _, modification_time, creation_time, _ = stats_result
                         file_name = ' '.join(file_name_parts)
                         timestamp_now = datetime.now().timestamp()
@@ -537,7 +536,7 @@ class Device():
 
                 # Determine rec_started_at
                 recording_started_at = None
-                recording_started_at_raw = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell stat -t {base_dir}{workspace_id}/{recording_id}/event.txt').split(' ')
+                recording_started_at_raw = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell stat -t {base_dir}{workspace_id}/{recording_id}/event.txt').split(' ')
                 if len(recording_started_at_raw) >= 13:
                     recording_started_at = int(recording_started_at_raw[13])
                 else:
@@ -545,7 +544,7 @@ class Device():
 
                 # Determine rec_duration
                 rec_duration = None
-                device_timestamp_now = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell date +"%s"')
+                device_timestamp_now = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell date +"%s"')
                 try:
                     device_timestamp_now = float(device_timestamp_now)
                     rec_duration = datetime.fromtimestamp(device_timestamp_now) - datetime.fromtimestamp(recording_started_at)
@@ -638,7 +637,7 @@ class Device():
         Queries the device for its current Wi-Fi connections and updates the
         internal state with the network keys.
         """
-        res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell dumpsys netstats | grep wlan')
+        res = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell dumpsys netstats | grep wlan')
         wifi_networks = re.search('wifiNetworkKey="([^"]+)"', res)
         if wifi_networks is not None:
             wifi_networks = list(set(wifi_networks.groups()))
@@ -651,18 +650,18 @@ class Device():
         in the indicators found.
         """
         indicators = {}
-        device_timezone = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell getprop persist.sys.timezone')
+        device_timezone = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell getprop persist.sys.timezone')
 
         if not any(e in device_timezone for e in ["adb:", "exception", "error"]):
             device_tzinfo = pytz.timezone(device_timezone)
             for rec_id,rec_obj in self._neon_companion_app_running_or_unsaved_recordings.items():
                 workspace_id = rec_obj['workspace_id']
-                res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell grep /storage/self/primary/Documents/Neon/{workspace_id}/{rec_id}/android.log -e 30s')
+                res = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell grep /storage/self/primary/Documents/Neon/{workspace_id}/{rec_id}/android.log -e 30s')
                 
                 indicators[rec_id] = []
                 
                 for line in res.splitlines():
-                    re_search = re.search(fr'(\d+-\d+ \d+:\d+:\d+.\d+).+({rec_id}.+)raw has not changed.+last size: (\d+)', line)
+                    re_search = re.search(f'(\d+-\d+ \d+:\d+:\d+.\d+).+({rec_id}.+)raw has not changed.+last size: (\d+)', line)
                     if re_search is None:
                         continue
                     log_time, file, last_size = re_search.groups()
@@ -691,9 +690,9 @@ class Device():
         Queries the device for vibration events, parses the output,
         and logs any changes in the recorded events.
         """
-        res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell cmd vibrator_manager dump | grep neon')
+        res = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell cmd vibrator_manager dump | grep neon')
         vibration_requests = re.findall('createTime: (.+), .+endTime: (.+), .+, status: (.+), effect:', res)
-        timezone = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell getprop persist.sys.timezone')
+        timezone = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell getprop persist.sys.timezone')
         vibrator_events = []
 
         if not any(e in timezone for e in ["adb:", "exception", "error"]):
@@ -726,7 +725,7 @@ class Device():
         Returns:
             datetime: The current date and time of the device.
         """
-        res = subprocess.getoutput(f'adb -s {self.ip_addr}:{self.port} shell date -Is')
+        res = subprocess_getoutput(f'adb -s {self.ip_addr}:{self.port} shell date -Is')
         return datetime.fromisoformat(res)
 
     def _reset_values(self, no_ping=False, no_adb=False, no_app=False):
