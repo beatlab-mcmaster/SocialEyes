@@ -92,16 +92,16 @@ class Device():
     
     @property
     def adb_status(self):
-        """Checks if the local machine has established an adb connection to the remote device, and if any adb calls threw an error.
+        """Checks if the local machine has established an adb connection to the remote device.
         
         If adb connection isn't established, consider running $ adb connect <ip_addr>:<adb_port>, e.g. $ adb connect 192.168.35.101:5555
         
         Returns
         -------
         bool
-            True, if adb connection is established and none of the subsequent adb calls threw an error, False otherwise.
+            True, if adb connection is established, False otherwise.
         """        
-        return self._adb_connection_is_established and self._adb_dumpsys_usb_threw_an_exception is False and self._adb_df_threw_an_exception is False
+        return self._adb_connection_is_established
     
     @property
     def battery_level(self):
