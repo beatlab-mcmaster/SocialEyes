@@ -9,6 +9,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Input, Label
+from textual.reactive import reactive
 from rich.text import Text
 from asyncio import sleep
 import numbers
@@ -19,23 +20,39 @@ import subprocess
 import os, time, json
 from datetime import datetime, timedelta
 from textual_utils import SelectableRowsDataTable
-from device import Device
+from device import Device, Fields
 from OffsetLogger import OffsetLogger
 from config import config
 import logging
-
+import asyncio
+from typing import Optional, Dict
+from device_manager import DeviceManager, DeviceState
 
 #Define column fields
-COLUMNS = ("Check", "Device", "IP", "PING", "WIFI", "ADB", "Battery", "Storage", "USB", "RED_INDICATOR", 
-        "App", "API", "RTSP", 
-        "PL_Rec" , "PL_Rec_ID", "PL_Rec_Duration"
-        #"Vibration", "White_LED"
-        )
+COLUMNS = {
+    "Check": None,
+    "Device": None,
+    "IP": None,
+    "PING": Fields.PING,
+    "WIFI": Fields.WIFI,
+    "ADB": Fields.ADB,
+    "Battery": Fields.BATTERY,
+    "Storage": Fields.STORAGE,
+    "USB": Fields.USB,
+    "RED_INDICATOR": Fields.RED_LIGHT_INDICATORS,
+    "App": Fields.APP_ACTIVE,
+    "API": Fields.APP_API_STATUS,
+    "RTSP": Fields.APP_RTSP_STATUS,
+    "PL_Rec": None,
+    "PL_Rec_ID": None,
+    "PL_Rec_Duration": None
+    #"Vibration", "White_LED"
+}
 
 class TableApp(App):
     CSS_PATH = "TUI.tcss"
     #could set as reactive elements so we can "watch" it. Alternatively, update at a fixed time interval.
-    #ping = reactive(list(range(N_DEVICES))) 
+    #ping = reactive(list(range(N_DEVICES)))
     row_keys = []
     column_keys = []
     devices = []
@@ -51,7 +68,11 @@ class TableApp(App):
 
     restart_app_in_progress = False
 
-    def on_mount(self) -> None:
+    device_states: reactive[Dict[str, DeviceState]] = reactive({}, recompose=False)
+    device_manager: Optional[DeviceManager] = None
+    _rendered_state: Dict[str, dict] = {}
+
+    async def on_mount(self) -> None:
         """
         Initializes the app upon mounting.
 
@@ -66,22 +87,22 @@ class TableApp(App):
             print("Session folder already exists, please try again.")
             self.app.exit()
         logging.basicConfig(
-            filename=os.path.join(self.session_dir,'logs.txt'), 
-            encoding='utf-8', 
+            filename=os.path.join(self.session_dir,'logs.txt'),
+            encoding='utf-8',
             level=config["logs"]["level"], # change to DEBUG if required
-            format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s') 
+            format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s')
         logging.getLogger('pupil_labs.realtime_api.time_echo').setLevel(logging.ERROR)
         self.logger = logging.getLogger('glassesRecord_TUI')
         self.status_widget = self.query_one(Label)
-        
+
         # Setup app theme and table
         self.theme = "textual-dark"
         table = self.query_one(SelectableRowsDataTable)
         table.cursor_type = "row"
-        self.column_keys = table.add_columns(*COLUMNS) #is_valid_column_index(self, column_index) can be used to verify
+        self.column_keys = table.add_columns(*list(COLUMNS.keys())) #is_valid_column_index(self, column_index) can be used to verify
 
         #Generate ip addrs of devices using config parameters (looks for a host_id range by default)
-        self.devices = []
+
         if "network_id" in config and "host_id" in config and config["network_id"] and (config["host_id"]["start"] <= config["host_id"]["end"]):
             network_id = config["network_id"]
             host_id_range = range(config["host_id"]["start"], config["host_id"]["end"]+1)
@@ -90,331 +111,182 @@ class TableApp(App):
             ip_list = config["ip_list"]
         else:
             raise ValueError("Configuration must contain either 'network_id' and 'host_id' or 'ip_list'.")
-        
-        #Populate devices 
+
+        #Populate devices
+        self.device_manager = DeviceManager()
+
         for ip_addr in ip_list:
-            d = Device(str(ip_addr), '5555')
-            self.devices.append(d)
+            self.device_manager.register_device(str(ip_addr), '5555')
+
+        self.device_manager.start_all()
 
         #Init offset logger for all devices if not in single session mode
         if not self.single_session_mode:
             self.offset_logger = {dev: None for dev in ip_list}
 
-        data = [(None, d.ip_addr, None, None, None, None, None, None, None, None, None, None, None, None, None) for d in self.devices]
+        registered_ip_list = [self.device_manager.devices[ip].ip_addr
+                              for ip in self.device_manager.devices.keys()]
+        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
         self.row_keys = table.add_rows(data)
         table.styles.scroll_x = "scroll_x"
-        #Splitting columns into two batches with different update timers. This setting could be configured further with more batches or a single batch.
-        self.set_interval(config["update_times"]["batch1"], self.batch_col_update1)
-        self.set_interval(config["update_times"]["batch2"], self.batch_col_update2)
 
         self.table_app_start_time = datetime.now()
 
-    def batch_col_update1(self):
-        """
-        Updates the first batch of columns.
-        """
-        self.update_ping()
-        self.update_wifi()
-        self.update_adb_status()
-        self.update_usb_connections()
-        #self.update_vibrator_events()
-        self.update_red_light_indicators()
-        self.update_storage()
-        self.update_battery()
-        self.update_app_active()
+        self.set_interval(0.5, self.query_device_states)
 
-    def batch_col_update2(self):
-        """
-        Updates the second batch of columns.
-        """
-        self.update_app_api_status()
-        self.update_app_rtsp_status()
-        self.update_app_recording_status()
-        self.update_app_identifiers()
+    def query_device_states(self) -> None:
+        s = self.device_manager.get_all_states()
+        self.device_states = s
 
-    def update_cell_if_changed(self, row_key, column_key, val, update_width=False):
-        """Update a specific cell in the data table if its value has changed.
+
+    async def on_unmount(self) -> None:
+        if self.device_manager:
+            self.device_manager.stop_all()
+        self.exit()
+
+    async def watch_device_states(self, states: Dict[str, DeviceState]) -> None:
+        """
+        Textual watcher: automatically invoked when device_states reactive property changes.
+
+        This runs in the UI thread and should be FAST:
+        - Only update cells that actually changed
+        - Use diff-based updates
+        - Never do I/O or long-running operations
 
         Args:
-            row_key: The key identifying the row to be updated.
-            column_key: The key identifying the column to be updated.
-            val: The new value to set in the cell.
-            update_width (bool): Optional; if True, adjust the column width to fit all values.
+            states: New dict of {ip_addr: DeviceState}
         """
         table = self.query_one(SelectableRowsDataTable)
 
-        current_val = table.get_cell(row_key, column_key)
-        if current_val != val:
-            #table._data[row_key][column_key] = val
-            table.update_cell(row_key, column_key, val, update_width=update_width)
+        # Get list of device IPs (in same order as table rows)
+        ip_list = [self.device_manager.devices[ip].ip_addr
+                   for ip in self.device_manager.devices.keys()]
 
-    @work(thread=True)
-    async def update_ping(self) -> None:
-        """Update the ping status for each device.
+        # Diff-based updates: only update cells that actually changed
+        updates = []
+        for idx, ip_addr in enumerate(ip_list):
+            if ip_addr not in states:
+                continue
 
-        This method retrieves the ping value from each device and updates the 
-        corresponding cell in the data table with a colored representation 
-        based on thresholds.
-        """
-        def task(r_idx, d):
-            val = d.ping
-            val = as_colored_text(val, reverse=True, thresh_low=100, thresh_high=500)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[3], val)
+            new_state = states[ip_addr]
+            old_state = self._rendered_state.get(ip_addr, {})
 
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
+            changed_fields = new_state.diff_fields(DeviceState(ip_addr=ip_addr, **old_state))
 
-    @work(thread=True)
-    async def update_wifi(self) -> None:
-        """Update the WiFi networks for each device.
+            # Diff-based updates
+            if Fields.PING in changed_fields:
+                val = as_colored_text(new_state.ping, thresh_low=500, thresh_high=1000)
+                updates.append((idx, Fields.PING, val))
 
-        This method retrieves the WiFi networks from each device and updates 
-        the corresponding cell in the data table, applying a colored format.
-        """
-        def task(r_idx, d):
-            val = d.wifi_networks
-            val = as_colored_text(val)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[4], val, update_width=True)
+            if Fields.DEVICE_NAME in changed_fields:
+                val = as_colored_text(new_state.device_name)
+                updates.append((idx, Fields.DEVICE_NAME, val))
 
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-        
-    @work(thread=True)
-    async def update_battery(self) -> None:
-        """Update the battery level for each device.
+            if Fields.ADB in changed_fields:
+                val = as_colored_text(new_state.adb)
+                updates.append((idx, Fields.ADB, val))
 
-        This method retrieves the battery level from each device and updates 
-        the corresponding cell in the data table with a colored representation 
-        based on defined thresholds.
-        """
+            if Fields.BATTERY in changed_fields:
+                val = as_colored_text(new_state.battery, thresh_low=25, thresh_high=50)
+                updates.append((idx, Fields.BATTERY, val))
 
-        def task(r_idx, d):
-            val = d.battery_level
-            val = as_colored_text(val, thresh_low=25, thresh_high=50)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[6], val)
+            if Fields.STORAGE in changed_fields:
+                val = as_colored_text(new_state.storage, thresh_low=25, thresh_high=50)
+                updates.append((idx, Fields.STORAGE, val))
 
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-    @work(thread=True)
-    async def update_adb_status(self) -> None:
-        """Update the ADB status for each device.
+            if Fields.USB in changed_fields:
+                usb_connections = None
+                if new_state.usb is not None:
+                    product_names = sorted([p["product_name"] for p in new_state.usb])
+                    usb_connections = {'Neon Scene Camera v1', 'Neon Sensor Module v1'}.issubset(set(product_names))
+                val = as_colored_text(usb_connections)
+                updates.append((idx, Fields.USB, val))
 
-        This method retrieves the ADB status from each device and updates 
-        the corresponding cell in the data table, applying a colored format.
-        """
-        def task(r_idx, d):
-            val = d.adb_status
-            val = as_colored_text(val)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[5], val, update_width=True)
+            if Fields.WIFI in changed_fields:
+                val = as_colored_text(','.join(new_state.wifi if new_state.wifi else []))
+                updates.append((idx, Fields.WIFI, val))
 
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()    
+            if Fields.APP_ACTIVE in changed_fields:
+                val = as_colored_text(new_state.app_active)
+                updates.append((idx, Fields.APP_ACTIVE, val))
 
-    @work(thread=True)
-    async def update_storage(self) -> None:
-        """Update the free disk space for each device.
+            if Fields.APP_API_STATUS in changed_fields:
+                val = as_colored_text(new_state.app_api_status)
+                updates.append((idx, Fields.APP_API_STATUS, val))
 
-        This method retrieves the available disk space from each device and 
-        updates the corresponding cell in the data table with a colored 
-        representation based on defined thresholds.
-        """
-        def task(r_idx, d):
-            val = d.free_disk_space
-            val = as_colored_text(val, thresh_low=25, thresh_high=50)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[7], val)
+            if Fields.APP_RTSP_STATUS in changed_fields:
+                val = as_colored_text(new_state.app_rtsp_status)
+                updates.append((idx, Fields.APP_RTSP_STATUS, val))
 
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
+            if Fields.DEVICE_NAME in changed_fields:
+                val = as_colored_text(new_state.device_name)
+                updates.append((idx, Fields.DEVICE_NAME, val))
 
-    @work(thread=True)
-    async def update_usb_connections(self) -> None:
-        """Update the USB connections status for each device.
+            if Fields.RED_LIGHT_INDICATORS in changed_fields:
+                val = as_colored_text(new_state.red_light_indicators)
+                updates.append((idx, Fields.RED_LIGHT_INDICATORS, val))
 
-        This method checks connected USB devices for each device and updates 
-        the corresponding cell in the data table, indicating if certain devices 
-        are connected.
-        """
-        def task(r_idx, d):
-            val = d.connected_usb_devices
+            if Fields.RECORDING_INFO in changed_fields:
+                val_id = None
+                val_duration = None
+                val_state = None
+                if new_state.recording_info and len(new_state.recording_info) > 0:
+                    latest_recording_id, latest_recording = sorted(new_state.recording_info.items(), key=lambda x: x[1].started_at, reverse=True)[0]
+                    val_id = as_colored_text(latest_recording_id)
+                    val_duration = as_colored_text(str(timedelta(seconds=latest_recording.duration)) if latest_recording.duration is not None else None)
+                    val_state = as_colored_text(str(latest_recording.state.name)) if latest_recording.state is not None else None
+                updates.append((idx, "PL_Rec", val_state))
+                updates.append((idx, "PL_Rec_ID", val_id))
+                updates.append((idx, "PL_Rec_Duration", val_duration))
+                
+
+            # Update rendered state tracker
+            if ip_addr not in self._rendered_state:
+                self._rendered_state[ip_addr] = {}
+            self._rendered_state[ip_addr].update(changed_fields)
+
+        # Apply updates to TUI
+        with self.app.batch_update():
+            for idx, field, val in updates:
+                table.update_cell(self.row_keys[idx], self._field_to_column(field), val, update_width=True)
+
+
+    def _field_to_val(self, field: str, val):
+        if field == Fields.PING:
+            return as_colored_text(val, reverse=True, thresh_low=100, thresh_high=500)
+        elif field in [Fields.WIFI, Fields.ADB, Fields.APP_ACTIVE, Fields.APP_API_STATUS, Fields.APP_RTSP_STATUS]:
+            return as_colored_text(val)
+        elif field in [Fields.BATTERY, Fields.STORAGE]:
+            return as_colored_text(val, thresh_low=25, thresh_high=50)
+        elif field == Fields.USB:
             usb_connections = None
             if val is not None:
-                product_names = sorted([p["product_name"] for p in d.connected_usb_devices])
+                product_names = sorted([p["product_name"] for p in val])
                 usb_connections = set(['Neon Scene Camera v1', 'Neon Sensor Module v1']).issubset(set(product_names))
-            usb_connections = as_colored_text(usb_connections)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[8], usb_connections, update_width=True)
+            return as_colored_text(usb_connections)
+        else:
+            return val
 
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-
-    @work(thread=True)
-    async def update_vibrator_events(self) -> None:
-        """Update the vibrator events for each device.
-
-        This method was implemented to detect Pupil Neon App crashes or errors marked by recent vibrator events.
-        It was used for remote troubleshooting during tests since these app crashes were frequent and are not handled by pupil-labs-realtime-api
-        """
-        def task(r_idx, d):
-            val = d.vibrator_events
-            vibrator_status = None
-            if val is not None:
-                for e in val:
-                    if e['create_time'].astimezone() > (self.table_app_start_time.astimezone()):
-                        since_time_locale = e["create_time"].astimezone().strftime("%m-%d %H:%M:%S")
-                        vibrator_status = f'PROBABLY_RED_FLASHING (at {since_time_locale})'
-            
-            #self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[9], vibrator_status, update_width=True)
-
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-
-    @work(thread=True)
-    async def update_red_light_indicators(self) -> None:
-        """Update the red light indicators for each device.
-
-        Similar to vibrator events, Pupil Neon App crashes/errors were also marked by accompanying red-light on the glasses in certain cases.
-        This method was used to remotely troubleshoot those cases during tests since they are not handled by or signalled on the pupil-labs-realtime-api
-        """
-        def task(r_idx, d):
-            val = d.red_light_indicators
-            red_light_indicators = None
-            recordings = d.app_recordings
-            if val is not None and recordings is not None and len(recordings) > 0:
-                red_light_indicators = []
-                for recording_id,recording_obj in recordings.items():
-                    if recording_id not in val:
-                        continue
-                    indicators = val[recording_id]
-                    for e in indicators:
-                        time_locale = e['time'].astimezone().strftime("%m-%d %H:%M:%S")
-                        vibrator_status = time_locale
-                        red_light_indicators.append(vibrator_status)
-            if red_light_indicators is not None:
-                red_light_indicators = ', '.join(red_light_indicators)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[9], red_light_indicators, update_width=True)
-
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-
-    @work(thread=True)
-    async def update_app_active(self) -> None:
-        """Update the active app status for each device.
-
-        This method retrieves the app status property from each device and updates 
-        the corresponding cell in the data table with a colored representation.
-        """
-        def task(r_idx, d):
-            val = d.app_status
-            val = as_colored_text(val)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[10], val, update_width=True)
-
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-
-    @work(thread=True)
-    async def update_app_api_status(self) -> None:
-        """Update the API status for each device.
-
-        This method retrieves the app API status property from each device and updates 
-        the corresponding cell in the data table with a colored representation.
-        """
-        def task(r_idx, d):
-            val = d.app_api_status
-            val = as_colored_text(val)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[11], val, update_width=True)
-
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-
-    @work(thread=True)
-    async def update_app_rtsp_status(self) -> None:
-        """Update the RTSP status for each device.
-
-        This method retrieves the RTSP status from each device and updates 
-        the corresponding cell in the data table with a colored representation.
-        """
-        def task(r_idx, d):
-            val = d.app_rtsp_status
-            val = as_colored_text(val)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[12], val, update_width=True)
-
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-    
-    @work(thread=True)
-    async def update_app_recording_status(self) -> None:
-        """Update the recording status for each device.
-
-        This method checks the app recording state and updates multiple 
-        cells in the data table with the recording state, ID, and duration.
-        """
-        def task(r_idx, d):
-            val = d.app_recordings
-            
-            rec = len(val) > 0
-            rec_id = rec_duration = None
-            rec_state = None
-            rec_duration = None
-
-            if rec:
-                rec_id = list(val.keys())[0] # most recent recording obj
-
-                recording_obj = val[rec_id]
-                rec_id = None if not rec else ", ".join([uuid.split('-')[0] + '-...' for uuid in val.keys()])
-                rec_duration = recording_obj['rec_duration']
-                rec_state = recording_obj['rec_state'].name
-                
-                rec = Text(str(rec), style='red on red') if rec else Text(str(rec), style='')
-
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[13], rec_state, update_width=True)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[14], rec_id, update_width=True)
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[15], rec_duration, update_width=True)
-
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-
-    @work(thread=True)
-    async def update_app_identifiers(self) -> None:
-        """Update the app identifiers for each device.
-
-        This method retrieves the app device name and updates the 
-        corresponding cell in the data table.
-        """
-        def task(r_idx, d):
-            device_name = d.app_device_name
-            #frame_name = d.app_frame_name
-            #module_serial = d.app_frame_name
-
-            self.update_cell_if_changed(self.row_keys[r_idx], self.column_keys[1], device_name)
-
-        for r_idx,d in enumerate(self.devices):
-            task(r_idx, d)
-            #t = threading.Thread(target=task, args=(r_idx, d), daemon=True)
-            #t.start()
-
+    def _field_to_column(self, field: str) -> Optional[str]:
+        """Map device field to table column."""
+        mapping = {
+            Fields.DEVICE_NAME: self.column_keys[1],
+            Fields.IP: self.column_keys[2],
+            Fields.PING: self.column_keys[3],
+            Fields.WIFI: self.column_keys[4],
+            Fields.ADB: self.column_keys[5],
+            Fields.BATTERY: self.column_keys[6],
+            Fields.STORAGE: self.column_keys[7],
+            Fields.USB: self.column_keys[8],
+            Fields.RED_LIGHT_INDICATORS: self.column_keys[9],
+            Fields.APP_ACTIVE: self.column_keys[10],
+            Fields.APP_API_STATUS: self.column_keys[11],
+            Fields.APP_RTSP_STATUS: self.column_keys[12],
+            "PL_Rec": self.column_keys[13],
+            "PL_Rec_ID": self.column_keys[14],
+            "PL_Rec_Duration": self.column_keys[15],
+        }
+        return mapping.get(field)
 
     def _action_key(self, target, key_code):
         """Remotely perform an action-key press on the specified device via ADB.
@@ -460,7 +332,7 @@ class TableApp(App):
     def start_recording(self, ip_addr):
         """Start recording on the specified device.
 
-        This method unlocks the phone, sends a request to start recording and then locks the phone again. 
+        This method unlocks the phone, sends a request to start recording and then locks the phone again.
         The unlocking ensures proper recording of audio and locking again ensures that the app is not accessed through the phone.
 
         Args:
@@ -480,8 +352,8 @@ class TableApp(App):
         except Exception as e:
             self.logger.error(f'{ip_addr}, {e}')
             pass
-        
-        return res  
+
+        return res
 
     def stop_and_save_recording(self, ip_addr):
         """Stop and save the recording on the specified device.
@@ -498,7 +370,7 @@ class TableApp(App):
         except Exception as e:
             self.logger.error(f'{ip_addr}, {e}')
             pass
-        return res  
+        return res
 
     def stop_and_discard_recording(self, ip_addr):
         """Stop and discard the recording on the specified device.
@@ -516,15 +388,15 @@ class TableApp(App):
             self.logger.error(f'{ip_addr}, {e}')
             print(e)
             pass
-        return res   
-    
+        return res
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Log event to JSON when input is submitted."""
         input_box = self.query_one(Input)
         event_text = input_box.value.strip()
         if not event_text:
-            event_text = "NA"        
-        
+            event_text = "NA"
+
         try:
             with open(self.events_file, "r") as f:
                 events = json.load(f)
@@ -571,7 +443,7 @@ class TableApp(App):
             message (str): The message to display in the status widget.
         """
         self.status_messages.append(new_msg)
-        self.status_messages = self.status_messages[-self.status_len:] 
+        self.status_messages = self.status_messages[-self.status_len:]
 
         if self.status_widget:
             self.status_widget.update('\n'.join(self.status_messages))
@@ -581,7 +453,7 @@ class TableApp(App):
     async def action_recording_start(self) -> None:
         """Start recording on selected devices.
 
-        This method retrieves the selected devices from the UI and starts 
+        This method retrieves the selected devices from the UI and starts
         recording on each one, logging the offsets if required.
         """
         table = self.query_one(SelectableRowsDataTable)
@@ -589,7 +461,7 @@ class TableApp(App):
         self.logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
         self.update_status_widget(f"    Starting recording on {len(selected_devices)} device(s)...")
         # print("STARTING REC on selected devices")
-        
+
         if self.single_session_mode:
             if not self.offset_logger:
                 self.offset_logger = OffsetLogger(selected_devices, log_dir=self.session_dir, log_interval=config["logs"]["interval"])
@@ -606,17 +478,17 @@ class TableApp(App):
         for d in selected_devices:
             t = threading.Thread(target=self.start_recording, args=(d,), daemon=True)
             t.start()
-        
+
         self.update_status_widget(f"    Start recordings action completed!")
-    
+
 
     ## Implementing action keys below to control the execution of certain operations manually by the operator.
-    
+
     @work(exclusive=True, thread=True)
     async def action_recording_stop_and_save(self) -> None:
         """Stop and save recording on selected devices.
 
-        This method retrieves the selected devices from the UI and stops 
+        This method retrieves the selected devices from the UI and stops
         recording on each one, logging the offsets if they were started.
         """
         table = self.query_one(SelectableRowsDataTable)
@@ -635,7 +507,7 @@ class TableApp(App):
     async def action_recording_stop_and_discard(self) -> None:
         """Stop and discard recording on selected devices.
 
-        This method retrieves the selected devices from the UI and stops 
+        This method retrieves the selected devices from the UI and stops
         recording on each one, logging the offsets if they were started.
         """
         table = self.query_one(SelectableRowsDataTable)
@@ -654,7 +526,7 @@ class TableApp(App):
     async def action_restart_app_on_devices(self) -> None:
         """Restart the app on selected devices.
 
-        This method retrieves the selected devices from the UI and restarts 
+        This method retrieves the selected devices from the UI and restarts
         the Neon Companion application on each one.
         """
         self.logger.info('action_restart_app_on_devices triggered!')
@@ -662,7 +534,7 @@ class TableApp(App):
             self.logger.info('Another restart progress is already in progress, nothing to do...')
             return
         print("RESTARTING APP on selected devices")
-        
+
         try:
             self.restart_app_in_progress = True
 
@@ -677,13 +549,13 @@ class TableApp(App):
                 adb_wrapper.stop_neon_companion_app()
                 adb_wrapper.start_neon_companion_app(wait_until_started=False)
                 self.logger.info(f'Restarting app on {ip_addr} has finished!')
-            
+
             tasks = []
             for ip_addr in selected_device_ip_addrs:
                 t = threading.Thread(target=f, args=[ip_addr])
                 tasks.append(t)
                 t.start()
-            
+
             for t in tasks:
                 t.join()
             self.logger.info(f'Restarting apps has finished!')
@@ -702,7 +574,7 @@ class TableApp(App):
         table = self.query_one(SelectableRowsDataTable)
         selected_device_ip_addrs = [row.data[1] for row in table.selected_rows]
         self.update_status_widget(f"    Restarting adb on {len(selected_device_ip_addrs)} devices...")
-        self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))     
+        self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))
 
         def run_adb_cmd(ip_addr):
             """Runs the adb connect command for a single device."""
@@ -713,7 +585,7 @@ class TableApp(App):
         for ip_addr in selected_device_ip_addrs:
             t = threading.Thread(target=run_adb_cmd, args=(ip_addr,), daemon=True)
             t.start()
-        
+
         print('FINISHED dispatching adb restart threads!')
         self.update_status_widget(f"    adb restart action completed!")
 
@@ -732,12 +604,12 @@ class TableApp(App):
 
     BINDINGS = [
         Binding(key="q", action="quit", description="Quit the app"),
-        Binding(key="r", action="recording_start", 
-            description="Start Recording"), 
-        Binding(key="s", action="recording_stop_and_save", 
-            description="Save Recording"), 
-        Binding(key="u", action="recording_stop_and_discard", 
-           description="Cancel Recording"), 
+        Binding(key="r", action="recording_start",
+            description="Start Recording"),
+        Binding(key="s", action="recording_stop_and_save",
+            description="Save Recording"),
+        Binding(key="u", action="recording_stop_and_discard",
+           description="Cancel Recording"),
         *([Binding(key="o", action="stop_all_offsets", description="Stop offsets logging on all devices")] if config["single_session_mode"] else []),
         Binding(key="t", action="restart_app_on_devices", description="Restart App"),
         Binding(key="a", action="reconnect_adb", description="Reconnect adb"),
@@ -821,5 +693,3 @@ def get_style_bool(val):
 if __name__ == "__main__":
     app = TableApp()
     app.run()
-
-

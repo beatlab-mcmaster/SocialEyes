@@ -1,19 +1,48 @@
-import subprocess
-
-def subprocess_getoutput(cmd, *, encoding=None, errors=None, timeout=10):
+import asyncio
+import aiohttp
+import logging
+    
+async def get_output(cmd, timeout=10) -> tuple[int | None, str | None, str | None]:
     """
-    Patched version of subprocess.getoutput(...), now incorporating a timeout (default: 10 seconds).
+    Executes `cmd`. If execution exceeds `timeout` (seconds), kill process.
 
-    Runs `cmd` and returns its output, ignoring errors.
+    Returns
+    -------
+    tuple
+        (return code, stdout, stderr)
     """
+    stdout = stderr = None
+    rc = None
+
+    process = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
     try:
-        data = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.STDOUT,
-                            encoding=encoding, errors=errors, timeout=timeout)
-        exitcode = 0
-    except subprocess.CalledProcessError as ex:
-        data = ex.output
-        exitcode = ex.returncode
-    if data[-1:] == '\n':
-        data = data[:-1]
-    #return exitcode, data
-    return data
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        stdout = stdout_bytes.decode().strip()
+        stderr = stderr_bytes.decode().strip()
+        rc = process.returncode
+    except asyncio.TimeoutError:
+        logging.error(f"Command '{cmd}' timed out.")
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        await process.communicate()
+        rc = process.returncode
+        
+    return rc, stdout, stderr
+
+async def get_http(url, timeout=10):
+    status_code = None
+    res = None
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+            async with session.get(url) as response:
+                status_code = response.status
+                res = await response.text()
+    except:
+        pass
+    return status_code, res

@@ -1,48 +1,44 @@
 import os
 import sys
-import subprocess
+import pytest
+import asyncio
 
 sys.path.insert(0, os.path.dirname(__file__))
-from adb_utils import subprocess_getoutput
+from adb_utils import get_output
 
-def test_subprocess_getoutput_returns_stdout_without_trailing_newline(monkeypatch):
-    expected_output = 'hello world\n'
+@pytest.mark.asyncio
+async def test_get_output_returns_rc_stdout_and_stderr(monkeypatch):
+    stdout_data = 'test-stdout'.encode()
+    stderr_data = 'test-stderr'.encode()
+    returncode  = 123
+    
+    async def fake_communicate(self, input=None):
+        return (stdout_data, stderr_data)
+    
+    fake_returncode = returncode
 
-    def fake_check_output(cmd, shell, text, stderr, encoding, errors, timeout):
-        assert cmd == 'echo hello world'
-        assert shell is True
-        assert text is True
-        assert stderr == subprocess.STDOUT
-        assert timeout == 10
-        return expected_output
+    monkeypatch.setattr(asyncio.subprocess.Process, 'communicate', fake_communicate)
+    monkeypatch.setattr(asyncio.subprocess.Process, 'returncode', fake_returncode)
 
-    monkeypatch.setattr(subprocess, 'check_output', fake_check_output)
+    res = await get_output("some command")
+    rc, stdout, stderr = res
 
-    assert subprocess_getoutput('echo hello world') == 'hello world'
+    assert rc == returncode
+    assert stdout == stdout_data.decode()
+    assert stderr == stderr_data.decode()
 
+@pytest.mark.asyncio
+async def test_get_output_implements_timeout(monkeypatch):
+    stdout_data = 'test-stdout'.encode()
+    stderr_data = 'test-stderr'.encode()
+    timeout = 1
+    
+    async def fake_communicate(self, input=None):
+        await asyncio.sleep(timeout * 2) # Trigger timeout
+        return (stdout_data, stderr_data)
+    
+    monkeypatch.setattr(asyncio.subprocess.Process, 'communicate', fake_communicate)
 
-def test_subprocess_getoutput_returns_calledprocesserror_output(monkeypatch):
-    expected_output = 'command failed'
-
-    class FakeCalledProcessError(subprocess.CalledProcessError):
-        pass
-
-    def fake_check_output(cmd, shell, text, stderr, encoding, errors, timeout):
-        raise FakeCalledProcessError(returncode=1, cmd=cmd, output=expected_output)
-
-    monkeypatch.setattr(subprocess, 'check_output', fake_check_output)
-
-    assert subprocess_getoutput('somecommand') == expected_output
-
-
-def test_subprocess_getoutput_forwards_timeout(monkeypatch):
-    recorded = {}
-
-    def fake_check_output(cmd, shell, text, stderr, encoding, errors, timeout):
-        recorded['timeout'] = timeout
-        return 'ok\n'
-
-    monkeypatch.setattr(subprocess, 'check_output', fake_check_output)
-
-    assert subprocess_getoutput('echo ok', timeout=123) == 'ok'
-    assert recorded['timeout'] == 123
+    res = await get_output("some command", timeout=timeout)
+    rc, stdout, stderr = res
+    assert rc == 127 # killed
