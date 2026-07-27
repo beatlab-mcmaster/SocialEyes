@@ -45,7 +45,7 @@ async def get_output(cmd, timeout=10) -> tuple[int | None, str | None, str | Non
             process.kill()
         except ProcessLookupError:
             pass
-        await process.communicate()
+        #await process.communicate()
         rc = process.returncode
         
     return rc, stdout, stderr
