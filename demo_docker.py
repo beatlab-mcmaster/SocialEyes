@@ -128,6 +128,8 @@ def run_demo():
     docker_cmd = [
         "docker",
         "run",
+        '--init',
+        '--name', 'socialeyes',
         "--rm",
         "-it",
         "--privileged",

@@ -5,10 +5,13 @@ Author: Shreshth Saxena, Alexander Nguyen
 Purpose: Implements the main interface to monitor and control multiple devices in the recording mode.
 """
 
+import multiprocessing
+
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Input, Label
+from textual.widgets._data_table import ColumnKey
 from textual.reactive import reactive
 from rich.text import Text
 from asyncio import sleep
@@ -18,15 +21,80 @@ import threading
 import requests
 import subprocess
 import os, time, json
-from datetime import datetime, timedelta
+from datetime import datetime
 from textual_utils import SelectableRowsDataTable
-from device import Device, Fields
 from OffsetLogger import OffsetLogger
 from config import config
 import logging
-import asyncio
-from typing import Optional, Dict
-from device_manager import DeviceManager, DeviceState
+from typing import Any, Optional, Dict
+from device_manager import DeviceManager
+from device import DeviceState
+from enum import Enum
+
+class Fields(str, Enum):
+    IP = 'ip'
+    PING = 'ping'
+    ADB = 'adb'
+    BATTERY = 'battery'
+    STORAGE = 'storage'
+    USB = 'usb'
+    WIFI = 'wifi'
+
+    APP_ACTIVE = 'app_active'
+    APP_API_STATUS = 'app_api_status'
+    APP_RTSP_STATUS = 'app_rtsp_status'
+    RECORDING_INFO = 'recording_info'
+
+    DEVICE_NAME = 'device_name'
+    FRAME_NAME = 'frame_name'
+    MODULE_SERIAL = 'module_serial'
+
+    VIBRATOR_EVENTS = 'vibrator_events'
+    RED_LIGHT_INDICATORS = 'red_light_indicators'
+
+    PL_REC = 'PL_Rec'
+
+class DeviceStateDict(Dict[Fields, Any]):
+    def __init__(self, state: Optional[DeviceState]):
+        super().__init__()
+        if state is not None:
+            self[Fields.IP] = state.ip_addr
+            self[Fields.PING] = state.ping
+            self[Fields.ADB] = state.adb_connection_is_established
+            self[Fields.BATTERY] = state.latest_statistics.phone.battery_level if state.latest_statistics else None
+            self[Fields.STORAGE] = state.latest_statistics.phone.storage.free_gb if state.latest_statistics else None
+            self[Fields.USB] = any("Neon" in d.product_name if d.product_name else False for d in state.latest_statistics.phone.usb_devices) if state.latest_statistics else None
+            self[Fields.WIFI] = state.latest_statistics.phone.wifi.ssid if state.latest_statistics else None
+            self[Fields.APP_ACTIVE] = state.latest_statistics.neon.is_active if state.latest_statistics else None
+            self[Fields.APP_API_STATUS] = state.neon_api_is_available
+            self[Fields.APP_RTSP_STATUS] = state.neon_rtsp_is_available
+            self[Fields.DEVICE_NAME] = state.neon_hardware_ids.device_name if state.neon_hardware_ids else None
+            self[Fields.FRAME_NAME] = state.neon_hardware_ids.frame_name if state.neon_hardware_ids else None
+            self[Fields.MODULE_SERIAL] = state.neon_hardware_ids.module_serial if state.neon_hardware_ids else None
+            self[Fields.RECORDING_INFO] = state.active_recordings
+            self[Fields.RED_LIGHT_INDICATORS] = any(ri.red_light_indicator_detected for ri in state.active_recordings.values()) if state.active_recordings else None
+
+            active_recordings_count = len(state.active_recordings) if state.active_recordings else None
+            active_recordings_by_start_time = None
+            if state.active_recordings:
+                active_recordings_by_start_time = dict(sorted(state.active_recordings.items(), key=lambda x: x[1].started_at if x[1].started_at else datetime.min, reverse=True))
+            rec_status_str = ', '.join([f"{rec_id}: {rec.started_at} ({rec.state.name})" for rec_id, rec in active_recordings_by_start_time.items()]) if active_recordings_by_start_time and len(active_recordings_by_start_time.keys()) > 0 else None
+            rec_status_str = f'{active_recordings_count} recording(s): {rec_status_str}'
+            self[Fields.PL_REC] = rec_status_str
+
+        else:
+            for field in Fields:
+                self[field] = None
+
+    def differing_fields(self, old: Optional['DeviceStateDict']) -> Dict[Fields, Any]:
+        # Returns a dictionary with the fields that have changed between self and `old`.
+        changed_fields = {}
+        if old is None:
+            return dict(self)
+        for key in self.keys():
+            if self[key] != old.get(key):
+                changed_fields[key] = self[key]
+        return changed_fields
 
 #Define column fields
 COLUMNS = {
@@ -57,7 +125,7 @@ class TableApp(App):
     column_keys = []
     devices = []
     offset_logger = None
-    logger = None
+    logger: logging.Logger
     session_id = datetime.now().strftime('%y%m%dT%H%M%S') #Session ID created using timestamp; could also be created using UUID, user input, etc.
     session_dir = os.path.join(config["logs"]["path"], session_id)
     events_file = os.path.join(session_dir, "events.json")
@@ -68,17 +136,13 @@ class TableApp(App):
 
     restart_app_in_progress = False
 
+    _device_manager: DeviceManager
+
     device_states: reactive[Dict[str, DeviceState]] = reactive({}, recompose=False)
-    device_manager: Optional[DeviceManager] = None
-    _rendered_state: Dict[str, dict] = {}
+    _rendered_state: Dict[str, DeviceStateDict] = {}
 
-    async def on_mount(self) -> None:
-        """
-        Initializes the app upon mounting.
-
-        Sets up the device table, generates IP addresses for devices, and schedules
-        periodic updates for various metrics related to the devices.
-        """
+    def __init__(self):
+        super().__init__()
 
         ## Setup session directory and logging
         try:
@@ -93,16 +157,9 @@ class TableApp(App):
             format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s')
         logging.getLogger('pupil_labs.realtime_api.time_echo').setLevel(logging.ERROR)
         self.logger = logging.getLogger('glassesRecord_TUI')
-        self.status_widget = self.query_one(Label)
-
-        # Setup app theme and table
-        self.theme = "textual-dark"
-        table = self.query_one(SelectableRowsDataTable)
-        table.cursor_type = "row"
-        self.column_keys = table.add_columns(*list(COLUMNS.keys())) #is_valid_column_index(self, column_index) can be used to verify
 
         #Generate ip addrs of devices using config parameters (looks for a host_id range by default)
-
+        
         if "network_id" in config and "host_id" in config and config["network_id"] and (config["host_id"]["start"] <= config["host_id"]["end"]):
             network_id = config["network_id"]
             host_id_range = range(config["host_id"]["start"], config["host_id"]["end"]+1)
@@ -113,143 +170,129 @@ class TableApp(App):
             raise ValueError("Configuration must contain either 'network_id' and 'host_id' or 'ip_list'.")
 
         #Populate devices
-        self.device_manager = DeviceManager()
-
+        self._device_manager = DeviceManager()
         for ip_addr in ip_list:
-            self.device_manager.register_device(str(ip_addr), '5555')
-
-        self.device_manager.start_all()
+            self._device_manager.register_device(str(ip_addr))
 
         #Init offset logger for all devices if not in single session mode
         if not self.single_session_mode:
             self.offset_logger = {dev: None for dev in ip_list}
 
-        registered_ip_list = [self.device_manager.devices[ip].ip_addr
-                              for ip in self.device_manager.devices.keys()]
-        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
+    async def on_mount(self) -> None:
+        """
+        Initializes the app upon mounting.
+
+        Sets up the device table, generates IP addresses for devices, and schedules
+        periodic updates for various metrics related to the devices.
+        """
+        await self._device_manager.start_all()
+        self.status_widget = self.query_one(Label)
+
+        # Setup app theme and table
+        self.theme = "textual-dark"
+        table = self.query_one(SelectableRowsDataTable)
+        table.cursor_type = "row"
+        self.column_keys = table.add_columns(*list(COLUMNS.keys())) #is_valid_column_index(self, column_index) can be used to verify
+
+        registered_ip_list = [self._device_manager.devices[ip]._ip_addr
+                              for ip in self._device_manager.devices.keys()]
+        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
         self.row_keys = table.add_rows(data)
         table.styles.scroll_x = "scroll_x"
 
         self.table_app_start_time = datetime.now()
 
-        self.set_interval(0.5, self.query_device_states)
+        self.set_interval(1, self.query_device_states)
 
     def query_device_states(self) -> None:
-        s = self.device_manager.get_all_states()
+        s = self._device_manager.get_all_device_states()
         self.device_states = s
 
-
     async def on_unmount(self) -> None:
-        if self.device_manager:
-            self.device_manager.stop_all()
+        if self._device_manager:
+            self._device_manager.stop_all()
         self.exit()
 
     async def watch_device_states(self, states: Dict[str, DeviceState]) -> None:
-        """
-        Textual watcher: automatically invoked when device_states reactive property changes.
-
-        This runs in the UI thread and should be FAST:
-        - Only update cells that actually changed
-        - Use diff-based updates
-        - Never do I/O or long-running operations
-
-        Args:
-            states: New dict of {ip_addr: DeviceState}
-        """
         table = self.query_one(SelectableRowsDataTable)
 
         # Get list of device IPs (in same order as table rows)
-        ip_list = [self.device_manager.devices[ip].ip_addr
-                   for ip in self.device_manager.devices.keys()]
+        ip_list = [self._device_manager.devices[ip]._ip_addr
+                   for ip in self._device_manager.devices.keys()]
 
         # Diff-based updates: only update cells that actually changed
-        updates = []
-        for idx, ip_addr in enumerate(ip_list):
-            if ip_addr not in states:
+        updates: list[tuple[int, Fields, Any]] = []
+        for row_idx, ip_addr in enumerate(ip_list):
+            if ip_addr not in states: # Skip if device state is not available
                 continue
 
-            new_state = states[ip_addr]
-            old_state = self._rendered_state.get(ip_addr, {})
+            old_state_dict = self._rendered_state.get(ip_addr, None)
+            new_state_dict = DeviceStateDict(states[ip_addr])
 
-            changed_fields = new_state.diff_fields(DeviceState(ip_addr=ip_addr, **old_state))
+            changed_fields = new_state_dict.differing_fields(old_state_dict)
+
+            self._rendered_state[ip_addr] = new_state_dict
 
             # Diff-based updates
             if Fields.PING in changed_fields:
-                val = as_colored_text(new_state.ping, thresh_low=500, thresh_high=1000)
-                updates.append((idx, Fields.PING, val))
+                val = as_colored_text(new_state_dict.get(Fields.PING), thresh_low=500, thresh_high=1000)
+                updates.append((row_idx, Fields.PING, val))
 
             if Fields.DEVICE_NAME in changed_fields:
-                val = as_colored_text(new_state.device_name)
-                updates.append((idx, Fields.DEVICE_NAME, val))
+                val = as_colored_text(new_state_dict.get(Fields.DEVICE_NAME))
+                updates.append((row_idx, Fields.DEVICE_NAME, val))
 
             if Fields.ADB in changed_fields:
-                val = as_colored_text(new_state.adb)
-                updates.append((idx, Fields.ADB, val))
+                val = as_colored_text(new_state_dict.get(Fields.ADB))
+                updates.append((row_idx, Fields.ADB, val))
 
             if Fields.BATTERY in changed_fields:
-                val = as_colored_text(new_state.battery, thresh_low=25, thresh_high=50)
-                updates.append((idx, Fields.BATTERY, val))
+                val = as_colored_text(new_state_dict.get(Fields.BATTERY), thresh_low=25, thresh_high=50)
+                updates.append((row_idx, Fields.BATTERY, val))
 
             if Fields.STORAGE in changed_fields:
-                val = as_colored_text(new_state.storage, thresh_low=25, thresh_high=50)
-                updates.append((idx, Fields.STORAGE, val))
+                val = as_colored_text(new_state_dict.get(Fields.STORAGE), thresh_low=25, thresh_high=50)
+                updates.append((row_idx, Fields.STORAGE, val))
 
             if Fields.USB in changed_fields:
-                usb_connections = None
-                if new_state.usb is not None:
-                    product_names = sorted([p["product_name"] for p in new_state.usb])
-                    usb_connections = {'Neon Scene Camera v1', 'Neon Sensor Module v1'}.issubset(set(product_names))
-                val = as_colored_text(usb_connections)
-                updates.append((idx, Fields.USB, val))
+                val = as_colored_text(new_state_dict.get(Fields.USB))
+                updates.append((row_idx, Fields.USB, val))
 
             if Fields.WIFI in changed_fields:
-                val = as_colored_text(','.join(new_state.wifi if new_state.wifi else []))
-                updates.append((idx, Fields.WIFI, val))
+                val = as_colored_text(new_state_dict.get(Fields.WIFI))
+                updates.append((row_idx, Fields.WIFI, val))
 
             if Fields.APP_ACTIVE in changed_fields:
-                val = as_colored_text(new_state.app_active)
-                updates.append((idx, Fields.APP_ACTIVE, val))
+                val = as_colored_text(new_state_dict.get(Fields.APP_ACTIVE))
+                updates.append((row_idx, Fields.APP_ACTIVE, val))
 
             if Fields.APP_API_STATUS in changed_fields:
-                val = as_colored_text(new_state.app_api_status)
-                updates.append((idx, Fields.APP_API_STATUS, val))
+                val = as_colored_text(new_state_dict.get(Fields.APP_API_STATUS))
+                updates.append((row_idx, Fields.APP_API_STATUS, val))
 
             if Fields.APP_RTSP_STATUS in changed_fields:
-                val = as_colored_text(new_state.app_rtsp_status)
-                updates.append((idx, Fields.APP_RTSP_STATUS, val))
+                val = as_colored_text(new_state_dict.get(Fields.APP_RTSP_STATUS))
+                updates.append((row_idx, Fields.APP_RTSP_STATUS, val))
 
             if Fields.DEVICE_NAME in changed_fields:
-                val = as_colored_text(new_state.device_name)
-                updates.append((idx, Fields.DEVICE_NAME, val))
+                val = as_colored_text(new_state_dict.get(Fields.DEVICE_NAME))
+                updates.append((row_idx, Fields.DEVICE_NAME, val))
 
             if Fields.RED_LIGHT_INDICATORS in changed_fields:
-                val = as_colored_text(new_state.red_light_indicators)
-                updates.append((idx, Fields.RED_LIGHT_INDICATORS, val))
+                val = as_colored_text(new_state_dict.get(Fields.RED_LIGHT_INDICATORS))
+                updates.append((row_idx, Fields.RED_LIGHT_INDICATORS, val))
 
-            if Fields.RECORDING_INFO in changed_fields:
-                val_id = None
-                val_duration = None
-                val_state = None
-                if new_state.recording_info and len(new_state.recording_info) > 0:
-                    latest_recording_id, latest_recording = sorted(new_state.recording_info.items(), key=lambda x: x[1].started_at, reverse=True)[0]
-                    val_id = as_colored_text(latest_recording_id)
-                    val_duration = as_colored_text(str(timedelta(seconds=latest_recording.duration)) if latest_recording.duration is not None else None)
-                    val_state = as_colored_text(str(latest_recording.state.name)) if latest_recording.state is not None else None
-                updates.append((idx, "PL_Rec", val_state))
-                updates.append((idx, "PL_Rec_ID", val_id))
-                updates.append((idx, "PL_Rec_Duration", val_duration))
-                
+            if Fields.PL_REC in changed_fields:
+                val = as_colored_text(new_state_dict.get(Fields.PL_REC))
+                updates.append((row_idx, Fields.PL_REC, val))
 
             # Update rendered state tracker
-            if ip_addr not in self._rendered_state:
-                self._rendered_state[ip_addr] = {}
-            self._rendered_state[ip_addr].update(changed_fields)
+            self._rendered_state[ip_addr].update(new_state_dict)
 
         # Apply updates to TUI
         with self.app.batch_update():
-            for idx, field, val in updates:
-                table.update_cell(self.row_keys[idx], self._field_to_column(field), val, update_width=True)
-
+            for row_idx, field, val in updates:
+                table.update_cell(self.row_keys[row_idx], self._field_to_column(field), val, update_width=True)
 
     def _field_to_val(self, field: str, val):
         if field == Fields.PING:
@@ -267,7 +310,7 @@ class TableApp(App):
         else:
             return val
 
-    def _field_to_column(self, field: str) -> Optional[str]:
+    def _field_to_column(self, field: Fields) -> ColumnKey:
         """Map device field to table column."""
         mapping = {
             Fields.DEVICE_NAME: self.column_keys[1],
@@ -282,54 +325,21 @@ class TableApp(App):
             Fields.APP_ACTIVE: self.column_keys[10],
             Fields.APP_API_STATUS: self.column_keys[11],
             Fields.APP_RTSP_STATUS: self.column_keys[12],
-            "PL_Rec": self.column_keys[13],
-            "PL_Rec_ID": self.column_keys[14],
-            "PL_Rec_Duration": self.column_keys[15],
+            Fields.PL_REC: self.column_keys[13]
         }
-        return mapping.get(field)
+        if field not in mapping:
+            raise ValueError(f"Field {field} does not have a corresponding column mapping.")
+        return mapping.get(field) # type: ignore
 
-    def _action_key(self, target, key_code):
-        """Remotely perform an action-key press on the specified device via ADB.
-
-        Args:
-            target (str): The target device identifier.
-            key_code (int): The key event code to be sent.
-        """
-        subprocess.getoutput(f'adb -s {target} shell input keyevent {str(key_code)}')
-
-    def unlock_phone(self, target):
-        """Remotely unlock the specified phone using ADB key events.
-        This functionality was required as the recordings triggered with a locked phone would not record with audio.
-        Ideally, this behaviour should be identified and corrected in properitary vendor apps (Neon companion in this case)
-
-        Args:
-            target (str): The target device identifier.
-        """
-        self._action_key(target, 26)
-        time.sleep(1)
-        # self._action_key(target, 26)
-        # time.sleep(0.4)
-        self._action_key(target, 82)
-        time.sleep(1)
-        # self._action_key(target, 82)
-        # time.sleep(0.)
-        subprocess.getoutput(f"adb -s {target} shell input text 2023")
-        time.sleep(0.5)
-        self._action_key(target, 66)
-
-    def lock_phone(self, target):
+    async def lock_phone(self, ip_addr: str) -> None:
         """Remotely lock the specified phone if it is currently unlocked.
 
         Args:
-            target (str): The target device identifier.
+            ip_addr (str): The IP address of the target device.
         """
-        screen_on = subprocess.getoutput(f'adb -s {target} shell dumpsys input_method | grep screenOn')
-        screen_on = 'true' in screen_on
+        await self._device_manager.devices[ip_addr].lock_display()
 
-        if screen_on:
-            self._action_key(target, 26)
-
-    def start_recording(self, ip_addr):
+    async def start_recording(self, ip_addr):
         """Start recording on the specified device.
 
         This method unlocks the phone, sends a request to start recording and then locks the phone again.
@@ -342,13 +352,12 @@ class TableApp(App):
             dict: The JSON response from the recording API, if successful.
         """
         res = None
-        # self.unlock_phone(ip_addr); time.sleep(3) ## PL Neon can now record audio on locked devices so this is not required anymore
 
         try:
             self.logger.info(f'Start recording on {ip_addr}')
             res = requests.post(f"http://{ip_addr}:8080/api/recording:start", timeout=2).json()
             time.sleep(0.1)
-            self.lock_phone(ip_addr)
+            await self.lock_phone(ip_addr)
         except Exception as e:
             self.logger.error(f'{ip_addr}, {e}')
             pass
@@ -480,7 +489,6 @@ class TableApp(App):
             t.start()
 
         self.update_status_widget(f"    Start recordings action completed!")
-
 
     ## Implementing action keys below to control the execution of certain operations manually by the operator.
 
@@ -688,8 +696,7 @@ def get_style_bool(val):
     else:
         return "red"
 
-
-
 if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn', force=True)
     app = TableApp()
     app.run()

@@ -7,3 +7,5 @@ pytest
 pytest-asyncio
 aiohttp
 pytz
+pydantic
+questionary
