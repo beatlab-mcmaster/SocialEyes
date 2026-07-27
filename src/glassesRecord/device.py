@@ -4,9 +4,10 @@ device.py
 Author: Alexander Nguyen, Shreshth Saxena
 Purpose: Implements the device class with Android Debug Bridge (ADB) utility functions to monitor the device.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 import os
+import random
 import re
 import numpy as np
 import datetime
@@ -46,7 +47,7 @@ class RecordingInfo:
 @dataclass
 class DeviceState:
     ip_addr: str
-    now: datetime.datetime = datetime.datetime.now()
+    now: datetime.datetime = field(default_factory=datetime.datetime.now)
     ping: Optional[int] = None
     adb_connection_is_established: Optional[bool] = None
     neon_api_is_available: Optional[bool] = None
@@ -59,7 +60,7 @@ class Device:
 
     _subprocess_timeout_s: int
     _adb_path: str
-    _target_cycle_period_s: int = 2
+    _target_cycle_period_s: int = 4
 
     # Internal state
     _background_task: Optional[asyncio.Task] = None

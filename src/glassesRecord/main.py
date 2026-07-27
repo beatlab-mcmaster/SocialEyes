@@ -53,6 +53,7 @@ class Fields(str, Enum):
     RED_LIGHT_INDICATORS = 'red_light_indicators'
 
     PL_REC = 'PL_Rec'
+    LAST_UPDATED = 'last_updated'
 
 class DeviceStateDict(Dict[Fields, Any]):
     def __init__(self, state: Optional[DeviceState]):
@@ -78,9 +79,13 @@ class DeviceStateDict(Dict[Fields, Any]):
             active_recordings_by_start_time = None
             if state.active_recordings:
                 active_recordings_by_start_time = dict(sorted(state.active_recordings.items(), key=lambda x: x[1].started_at if x[1].started_at else datetime.min, reverse=True))
-            rec_status_str = ', '.join([f"{rec_id}: {rec.started_at} ({rec.state.name})" for rec_id, rec in active_recordings_by_start_time.items()]) if active_recordings_by_start_time and len(active_recordings_by_start_time.keys()) > 0 else None
-            rec_status_str = f'{active_recordings_count} recording(s): {rec_status_str}'
+            rec_status_str = ''
+            if active_recordings_count and active_recordings_count > 0 and active_recordings_by_start_time:
+                rec_status_str = ', '.join([f"{short_recording_id(rec_id)} since {format_date(rec.started_at)} ({rec.state.name})" for rec_id, rec in active_recordings_by_start_time.items()]) if active_recordings_by_start_time and len(active_recordings_by_start_time.keys()) > 0 else None
+                rec_status_str = f'{active_recordings_count} recording{"s" if active_recordings_count > 1 else ""}: {rec_status_str}'
             self[Fields.PL_REC] = rec_status_str
+
+            self[Fields.LAST_UPDATED] = state.latest_statistics.now if state.latest_statistics else state.now
 
         else:
             for field in Fields:
@@ -111,10 +116,8 @@ COLUMNS = {
     "App": Fields.APP_ACTIVE,
     "API": Fields.APP_API_STATUS,
     "RTSP": Fields.APP_RTSP_STATUS,
-    "PL_Rec": None,
-    "PL_Rec_ID": None,
-    "PL_Rec_Duration": None
-    #"Vibration", "White_LED"
+    "PL_Rec": Fields.PL_REC,
+    "Last updated": Fields.LAST_UPDATED
 }
 
 class TableApp(App):
@@ -196,7 +199,7 @@ class TableApp(App):
 
         registered_ip_list = [self._device_manager.devices[ip]._ip_addr
                               for ip in self._device_manager.devices.keys()]
-        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
+        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
         self.row_keys = table.add_rows(data)
         table.styles.scroll_x = "scroll_x"
 
@@ -235,7 +238,7 @@ class TableApp(App):
 
             # Diff-based updates
             if Fields.PING in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.PING), thresh_low=500, thresh_high=1000)
+                val = as_colored_text(new_state_dict.get(Fields.PING), thresh_low=500, thresh_high=500, reverse=True)
                 updates.append((row_idx, Fields.PING, val))
 
             if Fields.DEVICE_NAME in changed_fields:
@@ -279,12 +282,17 @@ class TableApp(App):
                 updates.append((row_idx, Fields.DEVICE_NAME, val))
 
             if Fields.RED_LIGHT_INDICATORS in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.RED_LIGHT_INDICATORS))
+                val = as_colored_text(new_state_dict.get(Fields.RED_LIGHT_INDICATORS), reverse=True)
                 updates.append((row_idx, Fields.RED_LIGHT_INDICATORS, val))
 
             if Fields.PL_REC in changed_fields:
                 val = as_colored_text(new_state_dict.get(Fields.PL_REC))
                 updates.append((row_idx, Fields.PL_REC, val))
+
+            # Always update last_updated field
+            now = datetime.now()
+            val = as_colored_text(time_ago(now, new_state_dict.get(Fields.LAST_UPDATED)))
+            updates.append((row_idx, Fields.LAST_UPDATED, val))
 
             # Update rendered state tracker
             self._rendered_state[ip_addr].update(new_state_dict)
@@ -325,7 +333,8 @@ class TableApp(App):
             Fields.APP_ACTIVE: self.column_keys[10],
             Fields.APP_API_STATUS: self.column_keys[11],
             Fields.APP_RTSP_STATUS: self.column_keys[12],
-            Fields.PL_REC: self.column_keys[13]
+            Fields.PL_REC: self.column_keys[13],
+            Fields.LAST_UPDATED: self.column_keys[14]
         }
         if field not in mapping:
             raise ValueError(f"Field {field} does not have a corresponding column mapping.")
@@ -695,6 +704,35 @@ def get_style_bool(val):
         return "green"
     else:
         return "red"
+
+def time_ago(now: datetime, past: Optional[datetime]) -> str:
+    if not past:
+        return "Never"
+    delta = now - past
+    seconds = delta.total_seconds()
+    if seconds < 60:
+        return f"{int(seconds)} seconds ago"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    elif seconds < 86400:
+        hours = int(seconds // 3600)
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    else:
+        days = int(seconds // 86400)
+        return f"{days} day{'s' if days != 1 else ''} ago"
+
+def short_recording_id(recording_id: str) -> str:
+    return f"{recording_id[:9]}..." if recording_id else "N/A"
+
+def format_date(date: Optional[datetime]) -> str:
+    if not date:
+        return "N/A"
+    date = date.astimezone()  # Convert to local timezone
+    now = datetime.now().astimezone()  # Current time in local timezone
+    if (now - date).days < 1:
+        return date.strftime("%H:%M:%S")
+    return date.strftime("%Y-%m-%d %H:%M:%S")
 
 if __name__ == "__main__":
     multiprocessing.set_start_method('spawn', force=True)

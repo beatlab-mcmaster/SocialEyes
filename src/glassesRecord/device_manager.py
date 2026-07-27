@@ -68,4 +68,4 @@ class DeviceManager:
                 if pipe.poll():
                     state_update: DeviceState = pipe.recv()
                     self._device_states[ip_addr] = state_update
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)

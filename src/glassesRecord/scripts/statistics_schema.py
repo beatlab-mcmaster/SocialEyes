@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Literal
 from datetime import datetime
 
@@ -46,5 +46,6 @@ class PhoneStatistics(BaseModel):
 
 class DeviceStatistics(BaseModel):
     version: Literal["1.0"]
+    now: datetime = Field(default_factory=datetime.now)
     phone: PhoneStatistics
     neon: NeonStatistics
