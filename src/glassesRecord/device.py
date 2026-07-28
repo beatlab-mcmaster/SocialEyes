@@ -7,7 +7,6 @@ Purpose: Implements the device class with Android Debug Bridge (ADB) utility fun
 from dataclasses import dataclass, field
 from enum import Enum
 import os
-import random
 import re
 import numpy as np
 import datetime
@@ -20,6 +19,7 @@ from typing import Dict, Optional
 from collections import deque
 from scripts.statistics_schema import DeviceStatistics, Mp4File
 from collections.abc import Callable
+
 
 @dataclass
 class NeonHardwareIDs:
@@ -69,6 +69,7 @@ class Device:
     _state_history: deque[DeviceState] = deque(maxlen=10)
     _active_recordings: Optional[Dict[str, RecordingInfo]] = None
 
+    PING_PATTERN_WINDOWS = re.compile(r'time=([0-9.]+)ms TTL=\d+')
     PING_PATTERN = re.compile(r'ttl=\d+\s+time=([0-9.]+)\s+ms')
 
     @property
@@ -211,10 +212,15 @@ class Device:
         Updates the `_ping` attribute with the average time in milliseconds or sets it to None if there is no response.
         """
         ping = None
-        async with cmd_wrapper(f'ping -c 1 {self._ip_addr}', ignore_rc=True, timeout=self._subprocess_timeout_s) as (res,rc):
+
+        is_windows = os.name == 'nt'
+        ping_command = f'ping /n 1 {self._ip_addr}' if is_windows else f'ping -c 1 {self._ip_addr}'
+        ping_pattern = self.PING_PATTERN_WINDOWS if is_windows else self.PING_PATTERN
+
+        async with cmd_wrapper(ping_command, ignore_rc=True, timeout=self._subprocess_timeout_s) as (res,rc):
             if rc == 0:
                 if res is not None and len(res) > 0:
-                    re_search = self.PING_PATTERN.findall(res)
+                    re_search = ping_pattern.findall(res)
                     if re_search is not None and len(re_search) > 0:
                         times = [float(e) for e in re_search]
                         ping = int(np.average(times))
