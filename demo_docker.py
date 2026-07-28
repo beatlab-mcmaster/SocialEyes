@@ -138,6 +138,7 @@ def run_demo():
         "--add-host=host.docker.internal:host-gateway",
         "-e",
         "ANDROID_ADB_SERVER_ADDRESS=host.docker.internal",
+        '-e', 'TZ=America/Toronto',
         "socialeyes-img",
         "python",
         "demo.py",

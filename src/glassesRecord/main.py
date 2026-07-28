@@ -14,14 +14,13 @@ from textual.widgets import Footer, Input, Label
 from textual.widgets._data_table import ColumnKey
 from textual.reactive import reactive
 from rich.text import Text
-from asyncio import sleep
 import numbers
 from adb_wrapper import AdbWrapper
 import threading
 import requests
 import subprocess
 import os, time, json
-from datetime import datetime
+from datetime import datetime, timezone
 from textual_utils import SelectableRowsDataTable
 from OffsetLogger import OffsetLogger
 from config import config
@@ -82,10 +81,10 @@ class DeviceStateDict(Dict[Fields, Any]):
             rec_status_str = ''
             if active_recordings_count and active_recordings_count > 0 and active_recordings_by_start_time:
                 rec_status_str = ', '.join([f"{short_recording_id(rec_id)} since {format_date(rec.started_at)} ({rec.state.name})" for rec_id, rec in active_recordings_by_start_time.items()]) if active_recordings_by_start_time and len(active_recordings_by_start_time.keys()) > 0 else None
-                rec_status_str = f'{active_recordings_count} recording{"s" if active_recordings_count > 1 else ""}: {rec_status_str}'
+                rec_status_str = f'{rec_status_str}'
             self[Fields.PL_REC] = rec_status_str
 
-            self[Fields.LAST_UPDATED] = state.latest_statistics.now if state.latest_statistics else state.now
+            self[Fields.LAST_UPDATED] = state.latest_statistics.created_at if state.latest_statistics else state.now
 
         else:
             for field in Fields:
@@ -104,20 +103,26 @@ class DeviceStateDict(Dict[Fields, Any]):
 #Define column fields
 COLUMNS = {
     "Check": None,
-    "Device": None,
-    "IP": None,
-    "PING": Fields.PING,
-    "WIFI": Fields.WIFI,
+
+    "Last upd.": Fields.LAST_UPDATED,
+
+    "IP address": None,
     "ADB": Fields.ADB,
-    "Battery": Fields.BATTERY,
-    "Storage": Fields.STORAGE,
-    "USB": Fields.USB,
-    "RED_INDICATOR": Fields.RED_LIGHT_INDICATORS,
     "App": Fields.APP_ACTIVE,
     "API": Fields.APP_API_STATUS,
+    "USB": Fields.USB,
+    "Device": Fields.DEVICE_NAME,
+    "Frame": Fields.FRAME_NAME,
+
+    "Recording state": Fields.PL_REC,
+    "Red light indic.": Fields.RED_LIGHT_INDICATORS,
+
+    "Battery": Fields.BATTERY,
+    "Storage": Fields.STORAGE,
+    
     "RTSP": Fields.APP_RTSP_STATUS,
-    "PL_Rec": Fields.PL_REC,
-    "Last updated": Fields.LAST_UPDATED
+    "WIFI": Fields.WIFI,
+    "PING": Fields.PING,
 }
 
 class TableApp(App):
@@ -199,7 +204,7 @@ class TableApp(App):
 
         registered_ip_list = [self._device_manager.devices[ip]._ip_addr
                               for ip in self._device_manager.devices.keys()]
-        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
+        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
         self.row_keys = table.add_rows(data)
         table.styles.scroll_x = "scroll_x"
 
@@ -236,34 +241,14 @@ class TableApp(App):
 
             self._rendered_state[ip_addr] = new_state_dict
 
-            # Diff-based updates
-            if Fields.PING in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.PING), thresh_low=500, thresh_high=500, reverse=True)
-                updates.append((row_idx, Fields.PING, val))
-
-            if Fields.DEVICE_NAME in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.DEVICE_NAME))
-                updates.append((row_idx, Fields.DEVICE_NAME, val))
+            # Always update last_updated field
+            now = datetime.now(timezone.utc)
+            val = as_colored_text(time_ago(now, new_state_dict.get(Fields.LAST_UPDATED)))
+            updates.append((row_idx, Fields.LAST_UPDATED, val))
 
             if Fields.ADB in changed_fields:
                 val = as_colored_text(new_state_dict.get(Fields.ADB))
                 updates.append((row_idx, Fields.ADB, val))
-
-            if Fields.BATTERY in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.BATTERY), thresh_low=25, thresh_high=50)
-                updates.append((row_idx, Fields.BATTERY, val))
-
-            if Fields.STORAGE in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.STORAGE), thresh_low=25, thresh_high=50)
-                updates.append((row_idx, Fields.STORAGE, val))
-
-            if Fields.USB in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.USB))
-                updates.append((row_idx, Fields.USB, val))
-
-            if Fields.WIFI in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.WIFI))
-                updates.append((row_idx, Fields.WIFI, val))
 
             if Fields.APP_ACTIVE in changed_fields:
                 val = as_colored_text(new_state_dict.get(Fields.APP_ACTIVE))
@@ -273,26 +258,45 @@ class TableApp(App):
                 val = as_colored_text(new_state_dict.get(Fields.APP_API_STATUS))
                 updates.append((row_idx, Fields.APP_API_STATUS, val))
 
-            if Fields.APP_RTSP_STATUS in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.APP_RTSP_STATUS))
-                updates.append((row_idx, Fields.APP_RTSP_STATUS, val))
-
             if Fields.DEVICE_NAME in changed_fields:
                 val = as_colored_text(new_state_dict.get(Fields.DEVICE_NAME))
                 updates.append((row_idx, Fields.DEVICE_NAME, val))
 
-            if Fields.RED_LIGHT_INDICATORS in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.RED_LIGHT_INDICATORS), reverse=True)
-                updates.append((row_idx, Fields.RED_LIGHT_INDICATORS, val))
+            if Fields.USB in changed_fields:
+                val = as_colored_text(new_state_dict.get(Fields.USB))
+                updates.append((row_idx, Fields.USB, val))
+
+            if Fields.FRAME_NAME in changed_fields:
+                val = as_colored_text(new_state_dict.get(Fields.FRAME_NAME))
+                updates.append((row_idx, Fields.FRAME_NAME, val))
 
             if Fields.PL_REC in changed_fields:
                 val = as_colored_text(new_state_dict.get(Fields.PL_REC))
                 updates.append((row_idx, Fields.PL_REC, val))
 
-            # Always update last_updated field
-            now = datetime.now()
-            val = as_colored_text(time_ago(now, new_state_dict.get(Fields.LAST_UPDATED)))
-            updates.append((row_idx, Fields.LAST_UPDATED, val))
+            if Fields.RED_LIGHT_INDICATORS in changed_fields:
+                val = as_colored_text(new_state_dict.get(Fields.RED_LIGHT_INDICATORS), reverse=True)
+                updates.append((row_idx, Fields.RED_LIGHT_INDICATORS, val))
+
+            if Fields.BATTERY in changed_fields:
+                val = as_colored_text(new_state_dict.get(Fields.BATTERY), thresh_low=25, thresh_high=50)
+                updates.append((row_idx, Fields.BATTERY, val))
+
+            if Fields.STORAGE in changed_fields:
+                val = as_colored_text(new_state_dict.get(Fields.STORAGE), thresh_low=25, thresh_high=50)
+                updates.append((row_idx, Fields.STORAGE, val))
+
+            if Fields.APP_RTSP_STATUS in changed_fields:
+                val = as_colored_text(new_state_dict.get(Fields.APP_RTSP_STATUS))
+                updates.append((row_idx, Fields.APP_RTSP_STATUS, val))
+
+            if Fields.WIFI in changed_fields:
+                val = as_colored_text(new_state_dict.get(Fields.WIFI))
+                updates.append((row_idx, Fields.WIFI, val))
+
+            if Fields.PING in changed_fields:
+                            val = as_colored_text(new_state_dict.get(Fields.PING), thresh_low=500, thresh_high=500, reverse=True)
+                            updates.append((row_idx, Fields.PING, val))
 
             # Update rendered state tracker
             self._rendered_state[ip_addr].update(new_state_dict)
@@ -320,25 +324,10 @@ class TableApp(App):
 
     def _field_to_column(self, field: Fields) -> ColumnKey:
         """Map device field to table column."""
-        mapping = {
-            Fields.DEVICE_NAME: self.column_keys[1],
-            Fields.IP: self.column_keys[2],
-            Fields.PING: self.column_keys[3],
-            Fields.WIFI: self.column_keys[4],
-            Fields.ADB: self.column_keys[5],
-            Fields.BATTERY: self.column_keys[6],
-            Fields.STORAGE: self.column_keys[7],
-            Fields.USB: self.column_keys[8],
-            Fields.RED_LIGHT_INDICATORS: self.column_keys[9],
-            Fields.APP_ACTIVE: self.column_keys[10],
-            Fields.APP_API_STATUS: self.column_keys[11],
-            Fields.APP_RTSP_STATUS: self.column_keys[12],
-            Fields.PL_REC: self.column_keys[13],
-            Fields.LAST_UPDATED: self.column_keys[14]
-        }
-        if field not in mapping:
-            raise ValueError(f"Field {field} does not have a corresponding column mapping.")
-        return mapping.get(field) # type: ignore
+        if field is not None:
+            idx = list(COLUMNS.values()).index(field)
+            return self.column_keys[idx]
+        raise ValueError(f"Field {field} not found in COLUMNS mapping.")
 
     async def lock_phone(self, ip_addr: str) -> None:
         """Remotely lock the specified phone if it is currently unlocked.
@@ -657,7 +646,7 @@ def as_colored_text(val, **kwargs):
     if val is None:
         return '-'
     elif isinstance(val, bool):
-        return Text(str(val), style=get_style_bool(val))
+        return Text(str(val), style=get_style_bool(val, kwargs.get('reverse', False)))
     elif isinstance(val, numbers.Number):
         if 'reverse' in kwargs and kwargs['reverse']:
             return Text(str(val), style=get_style_num(-val, -kwargs['thresh_low'], -kwargs['thresh_high']))
@@ -686,7 +675,7 @@ def get_style_num(val, thresh_low, thresh_high):
     elif val >= thresh_high:
         return "green"
 
-def get_style_bool(val):
+def get_style_bool(val, reverse=False):
     """Determine the style for boolean values.
 
     Args:
@@ -701,29 +690,31 @@ def get_style_bool(val):
     if val == None:
         return ""
     elif val:
-        return "green"
+        return "red" if reverse else "green"
     else:
-        return "red"
+        return "green" if reverse else "red"
 
 def time_ago(now: datetime, past: Optional[datetime]) -> str:
     if not past:
         return "Never"
     delta = now - past
     seconds = delta.total_seconds()
+    if seconds < 5:
+        return "<5s ago"
     if seconds < 60:
-        return f"{int(seconds)} seconds ago"
+        return f"{int(seconds):>2}s ago"
     elif seconds < 3600:
         minutes = int(seconds // 60)
-        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+        return f"{minutes:>2}m ago"
     elif seconds < 86400:
         hours = int(seconds // 3600)
-        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        return f"{hours:>2}h ago"
     else:
         days = int(seconds // 86400)
-        return f"{days} day{'s' if days != 1 else ''} ago"
+        return f"{days:>2}d ago"
 
 def short_recording_id(recording_id: str) -> str:
-    return f"{recording_id[:9]}..." if recording_id else "N/A"
+    return f"{recording_id[:8]}..." if recording_id else "N/A"
 
 def format_date(date: Optional[datetime]) -> str:
     if not date:

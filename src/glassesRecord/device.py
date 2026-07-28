@@ -24,6 +24,7 @@ from collections.abc import Callable
 @dataclass
 class NeonHardwareIDs:
     device_name: Optional[str] = None
+    device_id: Optional[str] = None
     frame_name: Optional[str] = None
     module_serial: Optional[str] = None
 
@@ -47,7 +48,7 @@ class RecordingInfo:
 @dataclass
 class DeviceState:
     ip_addr: str
-    now: datetime.datetime = field(default_factory=datetime.datetime.now)
+    now: datetime.datetime = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
     ping: Optional[int] = None
     adb_connection_is_established: Optional[bool] = None
     neon_api_is_available: Optional[bool] = None
@@ -281,6 +282,7 @@ class Device:
         information. Updates internal state with new identifiers and logs any changes.
         """
         device_name = None
+        device_id = None
         frame_name = None
         module_serial = None
 
@@ -293,12 +295,14 @@ class Device:
                 e_data  = e['data']
                 if e_model == 'Phone':
                     device_name = str(e_data['device_name'])
+                    device_id = str(e_data['device_id'])
                 elif e_model == 'Hardware':
                     frame_name = str(e_data['frame_name'])
                     module_serial = str(e_data['module_serial'])
 
         return NeonHardwareIDs(
             device_name=device_name,
+            device_id=device_id,
             frame_name=frame_name,
             module_serial=module_serial
         )

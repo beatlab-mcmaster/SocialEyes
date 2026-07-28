@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Literal
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Mp4File(BaseModel):
     file_name: str
@@ -36,7 +36,7 @@ class UsbDeviceStatistics(BaseModel):
     product_name: str | None
 
 class PhoneStatistics(BaseModel):
-    now: datetime
+    now: datetime # The phone's current time
     timezone: str
     battery_level: int
     storage: StorageStatistics
@@ -46,6 +46,6 @@ class PhoneStatistics(BaseModel):
 
 class DeviceStatistics(BaseModel):
     version: Literal["1.0"]
-    now: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc)) # This computer's current time
     phone: PhoneStatistics
     neon: NeonStatistics
