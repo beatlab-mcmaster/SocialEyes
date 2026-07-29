@@ -10,7 +10,8 @@ from sklearn import linear_model
 import numpy as np
 import pandas as pd
 import matplotlib as plt
-from tqdm import tqdm        
+from tqdm import tqdm
+from pathlib import Path
 
 try:
     from offlineInterface.csv_processor import CSVProcessor
@@ -26,32 +27,46 @@ class TimeOffsetAdjuster:
 
     Attributes:
         device_name (str): Name of the device to identify in offsets dataframe.
-        offsets_file (str): Path to the offsets dataframe.
+        offsets_file_or_dir (str): Path to the offsets dataframe or directory containing it.
         device_offsets_df (obj): A pandas DataFrame that offsets for the device.
 
     Methods:
-        __init__(self, offsets_file): Initializes the TimeOffsetAdjuster object.
+        __init__(self, offsets_file_or_dir): Initializes the TimeOffsetAdjuster object.
         load_offsets(self, offsets_file): Loads the time offsets from a CSV file.
         calculate_linear_fit(self, save_plot): Calculates the linear fit for device offsets.
         adjust_files(self, file_paths, timestamp_col, local_tz): Adjusts the timestamps in provided list of files.
 
     """
 
-    def __init__(self, device_name, offsets_file, save_plot = False):
+    def __init__(self, device_name, offsets_file_or_dir, save_plot = False):
         self.device_name = device_name
-        self.offsets_file = offsets_file
-        self.device_offsets_df = self.load_offsets(offsets_file)
+        self.offsets_file_or_dir = offsets_file_or_dir
+        self.device_offsets_df = self.load_offsets(offsets_file_or_dir)
         self.ransac = self.calculate_linear_fit(save_plot)
 
-    def load_offsets(self, offsets_file):
+    def load_offsets(self, offsets_file_or_dir):
         """
-        Loads the time offsets from a CSV file and creates a dictionary 
+        Loads the time offsets from a CSV file (or the directory containing them) and creates a dictionary 
         to store the mean time offsets and timestamps for each device.
 
         Args:
-            offsets_file (str): The path to the CSV file containing the time offsets.
+            offsets_file_or_dir (str): The path to the CSV file (single-session mode) or directory (multi-session mode) containing the time offsets.
         """
-        offsets_df = CSVProcessor(offsets_file).read_csv()
+        offsets_file_or_dir = Path(offsets_file_or_dir)
+        offsets_df = None
+        if offsets_file_or_dir.is_dir():
+            # If it's a directory, find all CSV files in it
+            dfs = []
+            for dname in offsets_file_or_dir.iterdir():
+                if dname.is_dir():
+                    for fname in dname.iterdir():
+                        if fname.suffix == '.csv':
+                            dfs.append(CSVProcessor(fname).read_csv())
+            if not dfs:
+                raise FileNotFoundError(f"No CSV file found in directory: {offsets_file_or_dir}")
+            offsets_df = pd.concat(dfs)
+        else:
+            offsets_df = CSVProcessor(str(offsets_file_or_dir.absolute())).read_csv()
         return offsets_df[offsets_df["device"] == self.device_name] #filter out offsets for the device
 
     def calculate_linear_fit(self, save_plot=False):
@@ -69,7 +84,7 @@ class TimeOffsetAdjuster:
 
         if save_plot:
             #Save RANSAC fit plot
-            dirname = os.path.dirname(self.offsets_file)
+            dirname = os.path.dirname(self.offsets_file_or_dir)
             plt.plot(self.device_offsets_df["timestamp [ns]"], self.device_offsets_df["mean time offset [ms]"], label="mean time offset [ms]")
             plt.plot([X.min(), X.max()], [ransac.predict(np.array(X.min()).reshape(1,-1))[0,0], ransac.predict(np.array(X.max()).reshape(1,-1))[0,0]], label = "RANSAC fit")
             plt.savefig(os.path.join(dirname, f"RANSAC_fit_{self.device_name}.png"))

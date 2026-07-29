@@ -208,7 +208,7 @@ if __name__ == "__main__":
             
             use_ransac = questionary.confirm("Use RANSAC (recommended for longer recordings)?").ask()
 
-            offsets_path = questionary.path("Select offsets file (created by the GlassesRecord module) for the corresponding session").ask()
+            offsets_file_or_dir = questionary.path("Select offsets file (single-session mode) or directory (multi-session mode) (created by the GlassesRecord module) for the corresponding session").ask()
             if questionary.confirm("Would you like to add a search key for filtering files?").ask():
                 search_key = questionary.text("Enter search key: ").ask()
             else:
@@ -233,7 +233,7 @@ if __name__ == "__main__":
                             print("Skipping, cannot convert to device name: ", file_path)
                             continue
                         
-                        adjuster = TimeOffsetAdjuster(dname, offsets_path)
+                        adjuster = TimeOffsetAdjuster(dname, offsets_file_or_dir)
                         if use_ransac:
                             adjuster.adjust_files_ransac([file_path], disable = True) #Disabling tqdm bar since we already add one above 
                         else:
