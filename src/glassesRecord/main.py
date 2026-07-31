@@ -6,7 +6,7 @@ Purpose: Implements the main interface to monitor and control multiple devices i
 """
 
 import multiprocessing
-
+import asyncio
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -14,6 +14,7 @@ from textual.widgets import Footer, Input, Label
 from textual.widgets._data_table import ColumnKey
 from textual.reactive import reactive
 from rich.text import Text
+from rich.style import Style
 import numbers
 from adb_wrapper import AdbWrapper
 import threading
@@ -102,27 +103,24 @@ class DeviceStateDict(Dict[Fields, Any]):
 
 #Define column fields
 COLUMNS = {
-    "Check": None,
+    "Selected": None,
 
     "Last upd.": Fields.LAST_UPDATED,
-
-    "IP address": None,
+    "IP address": Fields.IP,
+    "PING": Fields.PING,
     "ADB": Fields.ADB,
+
+    "USB": Fields.USB,
     "App": Fields.APP_ACTIVE,
     "API": Fields.APP_API_STATUS,
-    "USB": Fields.USB,
     "Device": Fields.DEVICE_NAME,
     "Frame": Fields.FRAME_NAME,
 
-    "Recording state": Fields.PL_REC,
-    "Red light indic.": Fields.RED_LIGHT_INDICATORS,
-
     "Battery": Fields.BATTERY,
     "Storage": Fields.STORAGE,
-    
-    "RTSP": Fields.APP_RTSP_STATUS,
-    "WIFI": Fields.WIFI,
-    "PING": Fields.PING,
+
+    "Recording state": Fields.PL_REC,
+    "Red light indic.": Fields.RED_LIGHT_INDICATORS,    
 }
 
 class TableApp(App):
@@ -204,7 +202,7 @@ class TableApp(App):
 
         registered_ip_list = [self._device_manager.devices[ip]._ip_addr
                               for ip in self._device_manager.devices.keys()]
-        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
+        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
         self.row_keys = table.add_rows(data)
         table.styles.scroll_x = "scroll_x"
 
@@ -246,6 +244,10 @@ class TableApp(App):
             val = as_colored_text(time_ago(now, new_state_dict.get(Fields.LAST_UPDATED)))
             updates.append((row_idx, Fields.LAST_UPDATED, val))
 
+            if Fields.PING in changed_fields:
+                val = as_colored_text(new_state_dict.get(Fields.PING), thresh_low=500, thresh_high=500, reverse=True)
+                updates.append((row_idx, Fields.PING, val))
+
             if Fields.ADB in changed_fields:
                 val = as_colored_text(new_state_dict.get(Fields.ADB))
                 updates.append((row_idx, Fields.ADB, val))
@@ -259,7 +261,7 @@ class TableApp(App):
                 updates.append((row_idx, Fields.APP_API_STATUS, val))
 
             if Fields.DEVICE_NAME in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.DEVICE_NAME))
+                val = new_state_dict.get(Fields.DEVICE_NAME)
                 updates.append((row_idx, Fields.DEVICE_NAME, val))
 
             if Fields.USB in changed_fields:
@@ -285,18 +287,6 @@ class TableApp(App):
             if Fields.STORAGE in changed_fields:
                 val = as_colored_text(new_state_dict.get(Fields.STORAGE), thresh_low=25, thresh_high=50)
                 updates.append((row_idx, Fields.STORAGE, val))
-
-            if Fields.APP_RTSP_STATUS in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.APP_RTSP_STATUS))
-                updates.append((row_idx, Fields.APP_RTSP_STATUS, val))
-
-            if Fields.WIFI in changed_fields:
-                val = as_colored_text(new_state_dict.get(Fields.WIFI))
-                updates.append((row_idx, Fields.WIFI, val))
-
-            if Fields.PING in changed_fields:
-                            val = as_colored_text(new_state_dict.get(Fields.PING), thresh_low=500, thresh_high=500, reverse=True)
-                            updates.append((row_idx, Fields.PING, val))
 
             # Update rendered state tracker
             self._rendered_state[ip_addr].update(new_state_dict)
@@ -463,8 +453,7 @@ class TableApp(App):
         This method retrieves the selected devices from the UI and starts
         recording on each one, logging the offsets if required.
         """
-        table = self.query_one(SelectableRowsDataTable)
-        selected_devices = [row.data[1] for row in table.selected_rows]
+        selected_devices = self._get_selected_device_ip_addrs()
         self.logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
         self.update_status_widget(f"    Starting recording on {len(selected_devices)} device(s)...")
         # print("STARTING REC on selected devices")
@@ -482,9 +471,8 @@ class TableApp(App):
                     self.offset_logger[dev].log_offsets()
 
         #Start recording on all devices independently
-        for d in selected_devices:
-            t = threading.Thread(target=self.start_recording, args=(d,), daemon=True)
-            t.start()
+        t = [self.start_recording(d) for d in selected_devices]
+        await asyncio.gather(*t, return_exceptions=True)
 
         self.update_status_widget(f"    Start recordings action completed!")
 
@@ -497,8 +485,7 @@ class TableApp(App):
         This method retrieves the selected devices from the UI and stops
         recording on each one, logging the offsets if they were started.
         """
-        table = self.query_one(SelectableRowsDataTable)
-        selected_devices = [row.data[1] for row in table.selected_rows]
+        selected_devices = self._get_selected_device_ip_addrs()
         self.update_status_widget(f"    Saving recording on {len(selected_devices)} device(s)...")
         # print("STOPPING REC on selected device(s): ", selected_devices)
         self.logger.info(f"Stopping recording on {len(selected_devices)} device(s): {selected_devices}")
@@ -516,8 +503,7 @@ class TableApp(App):
         This method retrieves the selected devices from the UI and stops
         recording on each one, logging the offsets if they were started.
         """
-        table = self.query_one(SelectableRowsDataTable)
-        selected_devices = [row.data[1] for row in table.selected_rows]
+        selected_devices = self._get_selected_device_ip_addrs()
         self.update_status_widget(f"    Discarding recordings on {len(selected_devices)} device(s)...")
         # print("DISCARDING REC on selected devices")
         # Stop offset logging if it was started
@@ -544,8 +530,7 @@ class TableApp(App):
         try:
             self.restart_app_in_progress = True
 
-            table = self.query_one(SelectableRowsDataTable)
-            selected_device_ip_addrs = [row.data[1] for row in table.selected_rows]
+            selected_device_ip_addrs = self._get_selected_device_ip_addrs()
             self.update_status_widget(f"    Restarting app on {len(selected_device_ip_addrs)} devices...")
             self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))
 
@@ -558,7 +543,7 @@ class TableApp(App):
 
             tasks = []
             for ip_addr in selected_device_ip_addrs:
-                t = threading.Thread(target=f, args=[ip_addr])
+                t = threading.Thread(target=f, args=(ip_addr,))
                 tasks.append(t)
                 t.start()
 
@@ -578,7 +563,7 @@ class TableApp(App):
 
         print("RESTARTING ADB on selected devices!")
         table = self.query_one(SelectableRowsDataTable)
-        selected_device_ip_addrs = [row.data[1] for row in table.selected_rows]
+        selected_device_ip_addrs = self._get_selected_device_ip_addrs()
         self.update_status_widget(f"    Restarting adb on {len(selected_device_ip_addrs)} devices...")
         self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))
 
@@ -607,6 +592,16 @@ class TableApp(App):
         self.theme = (
             "solarized-light" if self.theme == "textual-dark" else "textual-dark"
         )
+
+    def _get_selected_device_ip_addrs(self) -> list[str]:
+        """Retrieve the list of selected device IP addresses from the UI table.
+
+        Returns:
+            list[str]: A list of selected device IP addresses.
+        """
+        table = self.query_one(SelectableRowsDataTable)
+        ip_addr_col_idx = list(COLUMNS.values()).index(Fields.IP) - 1
+        return [row.data[ip_addr_col_idx] for row in table.selected_rows]
 
     BINDINGS = [
         Binding(key="q", action="quit", description="Quit the app"),
@@ -655,7 +650,7 @@ def as_colored_text(val, **kwargs):
     else:
         return Text(str(val))
 
-def get_style_num(val, thresh_low, thresh_high):
+def get_style_num(val, thresh_low, thresh_high) -> Style:
     """Determine the style for numeric values based on thresholds.
 
     Args:
@@ -664,35 +659,37 @@ def get_style_num(val, thresh_low, thresh_high):
         thresh_high (float): The upper threshold.
 
     Returns:
-        str: The style to apply based on the value.
+        Style: The style to apply based on the value.
     """
     if val == None:
-        return ""
+        return Style()
     elif val <= thresh_low:
-        return "red"
+        return Style(color="red")
     elif thresh_high > val > thresh_low:
-        return "yellow"
+        return Style(color="yellow")
     elif val >= thresh_high:
-        return "green"
+        return Style(color="green")
+    else:
+        return Style()
 
-def get_style_bool(val, reverse=False):
+def get_style_bool(val, reverse=False) -> Style:
     """Determine the style for boolean values.
 
     Args:
         val (bool or None): The boolean value to evaluate.
 
     Returns:
-        str: The style to apply based on the value:
-             - "green" if True
-             - "red" if False
-             - "" (empty string) if None
+        Style: The style to apply based on the value:
+             - green if True
+             - red if False
+             - default (empty) if None
     """
     if val == None:
-        return ""
+        return Style()
     elif val:
-        return "red" if reverse else "green"
+        return Style(color="red") if reverse else Style(color="green")
     else:
-        return "green" if reverse else "red"
+        return Style(color="green") if reverse else Style(color="red")
 
 def time_ago(now: datetime, past: Optional[datetime]) -> str:
     if not past:
@@ -700,7 +697,7 @@ def time_ago(now: datetime, past: Optional[datetime]) -> str:
     delta = now - past
     seconds = delta.total_seconds()
     if seconds < 5:
-        return "<5s ago"
+        return "just now"
     if seconds < 60:
         return f"{int(seconds):>2}s ago"
     elif seconds < 3600:

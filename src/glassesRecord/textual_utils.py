@@ -135,7 +135,7 @@ class SelectableRowsDataTable(DataTable):
 
         Automatically insert a column with checkboxes in position 0.
         """
-        return super().add_rows((Checkbox("v"), *row) for row in rows)
+        return super().add_rows((Checkbox(False), *row) for row in rows)
 
     def clear(self, columns: bool = True):  # noqa: FBT001,FBT002
         """Clear rows and optionally columns.
