@@ -1,29 +1,39 @@
+from dataclasses import dataclass
 from typing import Optional, Dict
 import logging
 import logging.handlers
-from device import Device, DeviceState
 import multiprocessing
 import multiprocessing.connection
 import asyncio
+import datetime
 
-from device_worker import device_worker_process
+from .device import DeviceState
+from .device_worker import device_worker_process
+
+@dataclass
+class DeviceConfig:
+    ip_addr: str
+    port: int = 5555
 
 class DeviceManager:
 
-    _logger: logging.Logger
-    _logger_queue: multiprocessing.Queue
-    _logger_queue_listener: Optional[logging.handlers.QueueListener] = None
+    _target_cycle_period_s: float = 1.0
 
-    _devices: Dict[str, Device] = {} # Key: ip_addr, Value: Device instance
-    _device_states: Dict[str, DeviceState] = {} # Key: ip_addr, Value: DeviceState instance
+    _logger: logging.Logger
+    _logger_queue: multiprocessing.Queue # Queue for logging messages from device worker processes
+    _logger_queue_listener: Optional[logging.handlers.QueueListener] = None
 
     _processes: Dict[str, multiprocessing.Process] = {} # Key: ip_addr, Value: Process instance
     _pipes: Dict[str, multiprocessing.connection.Connection] = {} # Key: ip_addr, Value: Pipe instance
+
     _collect_states_task: Optional[asyncio.Task] = None
     _collect_states_thread_stop_requested = False
 
+    _devices: list[DeviceConfig] = []
+    _device_states: Dict[str, DeviceState] = {} # Key: ip_addr, Value: DeviceState instance
+
     @property
-    def devices(self) -> Dict[str, Device]:
+    def devices(self) -> list[DeviceConfig]:
         return self._devices
 
     def __init__(self):
@@ -34,14 +44,14 @@ class DeviceManager:
 
     def register_device(self, ip_addr: str, port: int = 5555):
         parent_conn, child_conn = multiprocessing.Pipe()
+
         p = multiprocessing.Process(target=device_worker_process, args=(ip_addr, port, child_conn, self._logger_queue))
-        self._processes[ip_addr] = p
-        self._pipes[ip_addr] = parent_conn
-        
         p.start()
         self._logger.info(f"Started device worker process for {ip_addr}")
 
-        self._devices[ip_addr] = Device(ip_addr, port, on_change=None) # TODO remove placeholder
+        self._processes[ip_addr] = p
+        self._pipes[ip_addr] = parent_conn
+        self._devices.append(DeviceConfig(ip_addr, port))
 
     async def start_all(self):
         self._collect_states_task = asyncio.create_task(self._collect_states())
@@ -63,9 +73,15 @@ class DeviceManager:
         return self._device_states.copy()
 
     async def _collect_states(self):
+        """Collect device states from worker processes."""
         while not self._collect_states_thread_stop_requested:
+            now = datetime.datetime.now()
+
             for ip_addr, pipe in self._pipes.items():
                 if pipe.poll():
                     state_update: DeviceState = pipe.recv()
                     self._device_states[ip_addr] = state_update
-            await asyncio.sleep(1)
+
+            time_since_last_update = (datetime.datetime.now() - now).total_seconds()
+            if time_since_last_update < self._target_cycle_period_s:
+                await asyncio.sleep(self._target_cycle_period_s - time_since_last_update)

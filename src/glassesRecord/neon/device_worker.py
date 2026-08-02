@@ -1,11 +1,16 @@
-from device import Device, DeviceState
 import asyncio
 import logging
 import logging.handlers
+from multiprocessing.connection import Connection
+from multiprocessing.queues import Queue
 from typing import Optional
+from .device import Device, DeviceState
 
-def device_worker_process(ip_addr, port, pipe, log_queue):
-    """Each device runs in its own process"""
+def device_worker_process(ip_addr: str, port: int, pipe: Connection, log_queue: Queue):
+    """
+    This is the worker process that manages a single device.
+    The process communicates with the main process via the `pipe` and sends log messages via the `log_queue`.
+    """
 
     # Setup logging to send logs to the main process via a queue
     log_queue_handler = logging.handlers.QueueHandler(log_queue)
@@ -13,11 +18,7 @@ def device_worker_process(ip_addr, port, pipe, log_queue):
     root_logger.addHandler(log_queue_handler)
     
     def on_change(new_state: Optional[DeviceState]):
-        """Callback to send state changes to the main process via queue"""
-        if new_state is not None:
-            pipe.send(new_state)
-        else:
-            logging.getLogger().warning("Received None as new_state in on_change callback")
+        pipe.send(new_state)
 
     device = Device(ip_addr, port, on_change=on_change)
     loop = asyncio.new_event_loop()

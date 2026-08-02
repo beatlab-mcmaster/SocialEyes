@@ -7,29 +7,28 @@ Purpose: Implements the main interface to monitor and control multiple devices i
 
 import multiprocessing
 import asyncio
-from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Input, Label
 from textual.widgets._data_table import ColumnKey
 from textual.reactive import reactive
-from rich.text import Text
-from rich.style import Style
-import numbers
-from adb_wrapper import AdbWrapper
-import threading
-import requests
-import subprocess
-import os, time, json
+import os, json
 from datetime import datetime, timezone
-from textual_utils import SelectableRowsDataTable
-from OffsetLogger import OffsetLogger
-from config import config
+
+from src.glassesRecord.clients.adb import connect_adb
+
+from .textual_utils import SelectableRowsDataTable
+from .config import config
 import logging
 from typing import Any, Optional, Dict
-from device_manager import DeviceManager
-from device import DeviceState
 from enum import Enum
+
+from .main_utils import time_ago, as_colored_text, short_recording_id, format_date
+from .neon.offset_logger import OffsetLogger
+from .neon.device_manager import DeviceManager
+from .neon.device import DeviceState
+from .clients.neon import start_neon_companion_app, start_neon_recording, stop_and_save_neon_recording, stop_neon_companion_app, cancel_neon_recording
+from .clients.core import SimpleClientResponse
 
 class Fields(str, Enum):
     IP = 'ip'
@@ -42,7 +41,6 @@ class Fields(str, Enum):
 
     APP_ACTIVE = 'app_active'
     APP_API_STATUS = 'app_api_status'
-    APP_RTSP_STATUS = 'app_rtsp_status'
     RECORDING_INFO = 'recording_info'
 
     DEVICE_NAME = 'device_name'
@@ -68,7 +66,6 @@ class DeviceStateDict(Dict[Fields, Any]):
             self[Fields.WIFI] = state.latest_statistics.phone.wifi.ssid if state.latest_statistics else None
             self[Fields.APP_ACTIVE] = state.latest_statistics.neon.is_active if state.latest_statistics else None
             self[Fields.APP_API_STATUS] = state.neon_api_is_available
-            self[Fields.APP_RTSP_STATUS] = state.neon_rtsp_is_available
             self[Fields.DEVICE_NAME] = state.neon_hardware_ids.device_name if state.neon_hardware_ids else None
             self[Fields.FRAME_NAME] = state.neon_hardware_ids.frame_name if state.neon_hardware_ids else None
             self[Fields.MODULE_SERIAL] = state.neon_hardware_ids.module_serial if state.neon_hardware_ids else None
@@ -191,40 +188,54 @@ class TableApp(App):
         Sets up the device table, generates IP addresses for devices, and schedules
         periodic updates for various metrics related to the devices.
         """
+        self._setup_table()
+        self._setup_status_widget()
+
+        # Start all device monitoring workers in the device manager
         await self._device_manager.start_all()
-        self.status_widget = self.query_one(Label)
 
-        # Setup app theme and table
-        self.theme = "textual-dark"
-        table = self.query_one(SelectableRowsDataTable)
-        table.cursor_type = "row"
-        self.column_keys = table.add_columns(*list(COLUMNS.keys())) #is_valid_column_index(self, column_index) can be used to verify
-
-        registered_ip_list = [self._device_manager.devices[ip]._ip_addr
-                              for ip in self._device_manager.devices.keys()]
-        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
-        self.row_keys = table.add_rows(data)
-        table.styles.scroll_x = "scroll_x"
-
-        self.table_app_start_time = datetime.now()
-
-        self.set_interval(1, self.query_device_states)
-
-    def query_device_states(self) -> None:
-        s = self._device_manager.get_all_device_states()
-        self.device_states = s
+        # Schedule periodic updates for device states and other metrics
+        self.set_interval(1, self._update_device_states)
 
     async def on_unmount(self) -> None:
         if self._device_manager:
             self._device_manager.stop_all()
         self.exit()
 
+    def _setup_table(self):
+        # Setup table
+        table = self.query_one(SelectableRowsDataTable)
+        table.cursor_type = "row"
+
+        # Columns
+        self.column_keys = table.add_columns(*list(COLUMNS.keys())) #is_valid_column_index(self, column_index) can be used to verify
+
+        # Rows
+        registered_ip_list = [d.ip_addr for d in self._device_manager.devices]
+        data = [(None, ip_addr, None, None, None, None, None, None, None, None, None, None, None) for ip_addr in registered_ip_list]
+        self.row_keys = table.add_rows(data)
+
+        # UI
+        self.theme = "textual-dark"
+        table.styles.scroll_x = "scroll_x"
+
+    def _setup_status_widget(self):
+        self.status_widget = self.query_one(Label)
+
+    def _update_device_states(self) -> None:
+        s = self._device_manager.get_all_device_states()
+        self.device_states = s
+
+    def _get_displayed_ip_addresses(self) -> list[str]:
+        table = self.query_one(SelectableRowsDataTable)
+        ip_addr_col_key = self.column_keys[list(COLUMNS.values()).index(Fields.IP)]
+        return [table.get_cell(row_key, ip_addr_col_key) for row_key in self.row_keys]
+
     async def watch_device_states(self, states: Dict[str, DeviceState]) -> None:
         table = self.query_one(SelectableRowsDataTable)
 
         # Get list of device IPs (in same order as table rows)
-        ip_list = [self._device_manager.devices[ip]._ip_addr
-                   for ip in self._device_manager.devices.keys()]
+        ip_list = self._get_displayed_ip_addresses()
 
         # Diff-based updates: only update cells that actually changed
         updates: list[tuple[int, Fields, Any]] = []
@@ -296,96 +307,12 @@ class TableApp(App):
             for row_idx, field, val in updates:
                 table.update_cell(self.row_keys[row_idx], self._field_to_column(field), val, update_width=True)
 
-    def _field_to_val(self, field: str, val):
-        if field == Fields.PING:
-            return as_colored_text(val, reverse=True, thresh_low=100, thresh_high=500)
-        elif field in [Fields.WIFI, Fields.ADB, Fields.APP_ACTIVE, Fields.APP_API_STATUS, Fields.APP_RTSP_STATUS]:
-            return as_colored_text(val)
-        elif field in [Fields.BATTERY, Fields.STORAGE]:
-            return as_colored_text(val, thresh_low=25, thresh_high=50)
-        elif field == Fields.USB:
-            usb_connections = None
-            if val is not None:
-                product_names = sorted([p["product_name"] for p in val])
-                usb_connections = set(['Neon Scene Camera v1', 'Neon Sensor Module v1']).issubset(set(product_names))
-            return as_colored_text(usb_connections)
-        else:
-            return val
-
     def _field_to_column(self, field: Fields) -> ColumnKey:
         """Map device field to table column."""
         if field is not None:
             idx = list(COLUMNS.values()).index(field)
             return self.column_keys[idx]
         raise ValueError(f"Field {field} not found in COLUMNS mapping.")
-
-    async def lock_phone(self, ip_addr: str) -> None:
-        """Remotely lock the specified phone if it is currently unlocked.
-
-        Args:
-            ip_addr (str): The IP address of the target device.
-        """
-        await self._device_manager.devices[ip_addr].lock_display()
-
-    async def start_recording(self, ip_addr):
-        """Start recording on the specified device.
-
-        This method unlocks the phone, sends a request to start recording and then locks the phone again.
-        The unlocking ensures proper recording of audio and locking again ensures that the app is not accessed through the phone.
-
-        Args:
-            ip_addr (str): The IP address of the target device.
-
-        Returns:
-            dict: The JSON response from the recording API, if successful.
-        """
-        res = None
-
-        try:
-            self.logger.info(f'Start recording on {ip_addr}')
-            res = requests.post(f"http://{ip_addr}:8080/api/recording:start", timeout=2).json()
-            time.sleep(0.1)
-            await self.lock_phone(ip_addr)
-        except Exception as e:
-            self.logger.error(f'{ip_addr}, {e}')
-            pass
-
-        return res
-
-    def stop_and_save_recording(self, ip_addr):
-        """Stop and save the recording on the specified device.
-
-        Args:
-            ip_addr (str): The IP address of the target device.
-
-        Returns:
-            dict: The JSON response from the recording API, if successful.
-        """
-        res = None
-        try:
-            res = requests.post(f"http://{ip_addr}:8080/api/recording:stop_and_save", timeout=2).json()
-        except Exception as e:
-            self.logger.error(f'{ip_addr}, {e}')
-            pass
-        return res
-
-    def stop_and_discard_recording(self, ip_addr):
-        """Stop and discard the recording on the specified device.
-
-        Args:
-            ip_addr (str): The IP address of the target device.
-
-        Returns:
-            dict: The JSON response from the recording API, if successful.
-        """
-        res = None
-        try:
-            res = requests.post(f"http://{ip_addr}:8080/api/recording:cancel", timeout=2).json()
-        except Exception as e:
-            self.logger.error(f'{ip_addr}, {e}')
-            print(e)
-            pass
-        return res
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Log event to JSON when input is submitted."""
@@ -410,7 +337,7 @@ class TableApp(App):
         # Clear box
         input_box.value = ""
 
-    def stop_recording_offsets(self, device_list):
+    def _stop_recording_offsets(self, device_list):
         """
         Stop logging offsets for the specified devices.
         Args:
@@ -433,7 +360,7 @@ class TableApp(App):
             print(e)
             pass
 
-    def update_status_widget(self, new_msg):
+    def _update_status_widget(self, new_msg):
         """Update the status widget with the provided message.
 
         Args:
@@ -446,7 +373,6 @@ class TableApp(App):
             self.status_widget.update('\n'.join(self.status_messages))
 
     #Defining actions
-    @work(exclusive=True, thread=True)
     async def action_recording_start(self) -> None:
         """Start recording on selected devices.
 
@@ -455,7 +381,7 @@ class TableApp(App):
         """
         selected_devices = self._get_selected_device_ip_addrs()
         self.logger.info("Selected devices ({}): {}".format(len(selected_devices), selected_devices))
-        self.update_status_widget(f"    Starting recording on {len(selected_devices)} device(s)...")
+        self._update_status_widget(f"    Starting recording on {len(selected_devices)} device(s)...")
         # print("STARTING REC on selected devices")
 
         if self.single_session_mode:
@@ -471,14 +397,13 @@ class TableApp(App):
                     self.offset_logger[dev].log_offsets()
 
         #Start recording on all devices independently
-        t = [self.start_recording(d) for d in selected_devices]
+        t = [start_neon_recording(d) for d in selected_devices]
         await asyncio.gather(*t, return_exceptions=True)
 
-        self.update_status_widget(f"    Start recordings action completed!")
+        self._update_status_widget(f"    Start recordings action completed!")
 
     ## Implementing action keys below to control the execution of certain operations manually by the operator.
 
-    @work(exclusive=True, thread=True)
     async def action_recording_stop_and_save(self) -> None:
         """Stop and save recording on selected devices.
 
@@ -486,17 +411,18 @@ class TableApp(App):
         recording on each one, logging the offsets if they were started.
         """
         selected_devices = self._get_selected_device_ip_addrs()
-        self.update_status_widget(f"    Saving recording on {len(selected_devices)} device(s)...")
+        self._update_status_widget(f"    Saving recording on {len(selected_devices)} device(s)...")
         # print("STOPPING REC on selected device(s): ", selected_devices)
         self.logger.info(f"Stopping recording on {len(selected_devices)} device(s): {selected_devices}")
-        # Stop offset logging if it was started
-        self.stop_recording_offsets(selected_devices)
-        for d in selected_devices:
-            t = threading.Thread(target=self.stop_and_save_recording, args=(d,), daemon=True)
-            t.start()
-        self.update_status_widget(f"    Save recordings action completed!")
 
-    @work(exclusive=True, thread=True)
+        # Stop offset logging if it was started
+        self._stop_recording_offsets(selected_devices)
+
+        tasks = [stop_and_save_neon_recording(d) for d in selected_devices]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        self._update_status_widget(f"    Save recordings action completed!")
+
     async def action_recording_stop_and_discard(self) -> None:
         """Stop and discard recording on selected devices.
 
@@ -504,17 +430,18 @@ class TableApp(App):
         recording on each one, logging the offsets if they were started.
         """
         selected_devices = self._get_selected_device_ip_addrs()
-        self.update_status_widget(f"    Discarding recordings on {len(selected_devices)} device(s)...")
+        self._update_status_widget(f"    Discarding recordings on {len(selected_devices)} device(s)...")
         # print("DISCARDING REC on selected devices")
         # Stop offset logging if it was started
         self.logger.info(f"Discarding recording on {len(selected_devices)} device(s): {selected_devices}")
-        self.stop_recording_offsets(selected_devices)
-        for d in selected_devices:
-            t = threading.Thread(target=self.stop_and_discard_recording, args=(d,), daemon=True)
-            t.start()
-        self.update_status_widget(f"    Discard recordings action completed!")
 
-    @work(exclusive=True, thread=True)
+        self._stop_recording_offsets(selected_devices)
+
+        tasks = [cancel_neon_recording(d) for d in selected_devices]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        self._update_status_widget(f"    Discard recordings action completed!")
+
     async def action_restart_app_on_devices(self) -> None:
         """Restart the app on selected devices.
 
@@ -531,31 +458,24 @@ class TableApp(App):
             self.restart_app_in_progress = True
 
             selected_device_ip_addrs = self._get_selected_device_ip_addrs()
-            self.update_status_widget(f"    Restarting app on {len(selected_device_ip_addrs)} devices...")
+            self._update_status_widget(f"    Restarting app on {len(selected_device_ip_addrs)} devices...")
             self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))
 
-            def f(ip_addr):
+            async def f(ip_addr: str, port: int):
                 self.logger.info(f'Restarting app on {ip_addr}...')
-                adb_wrapper = AdbWrapper(ip_addr)
-                adb_wrapper.stop_neon_companion_app()
-                adb_wrapper.start_neon_companion_app(wait_until_started=False)
+                await stop_neon_companion_app(ip_addr, port, wait_until_stopped=True)
+                await start_neon_companion_app(ip_addr, port, wait_until_started=False)
                 self.logger.info(f'Restarting app on {ip_addr} has finished!')
 
-            tasks = []
-            for ip_addr in selected_device_ip_addrs:
-                t = threading.Thread(target=f, args=(ip_addr,))
-                tasks.append(t)
-                t.start()
+            tasks = [f(ip_addr, 5555) for ip_addr in selected_device_ip_addrs]
+            await asyncio.gather(*tasks, return_exceptions=True)
 
-            for t in tasks:
-                t.join()
             self.logger.info(f'Restarting apps has finished!')
-            self.update_status_widget(f"    App restart action completed!")
+            self._update_status_widget(f"    App restart action completed!")
         finally:
             self.restart_app_in_progress = False
             self.logger.info(f'self.restart_app_in_progress = False')
 
-    @work(exclusive=True, thread=True)
     async def action_reconnect_adb(self) -> None:
         """
         Attempts to reconnect to an Android Debug Bridge (ADB) device at the specified IP address(es).
@@ -564,28 +484,25 @@ class TableApp(App):
         print("RESTARTING ADB on selected devices!")
         table = self.query_one(SelectableRowsDataTable)
         selected_device_ip_addrs = self._get_selected_device_ip_addrs()
-        self.update_status_widget(f"    Restarting adb on {len(selected_device_ip_addrs)} devices...")
+        self._update_status_widget(f"    Restarting adb on {len(selected_device_ip_addrs)} devices...")
         self.logger.info("Selected devices ({}): {}".format(len(selected_device_ip_addrs), selected_device_ip_addrs))
 
-        def run_adb_cmd(ip_addr):
-            """Runs the adb connect command for a single device."""
-            self.logger.info(f"Restarting adb on {ip_addr}...")
-            res = subprocess.run(f"adb connect {ip_addr}:5555", shell=True, capture_output=True, text=True)
-            self.logger.info(res.stdout.strip())
+        tasks = [connect_adb(ip_addr) for ip_addr in selected_device_ip_addrs]
+        futures = await asyncio.gather(*tasks, return_exceptions=True)
+        for ip_addr, future in zip(selected_device_ip_addrs, futures):
+            if isinstance(future, Exception):
+                self.logger.error(f"Error reconnecting ADB for {ip_addr}: {future}")
+                self._update_status_widget(f"    Error reconnecting ADB for {ip_addr}: {future}")
+            elif isinstance(future, SimpleClientResponse) and future.result is False:
+                self.logger.error(f"Failed to reconnect ADB for {ip_addr}: {', '.join(future.error_messages)}")
+                self._update_status_widget(f"    Failed to reconnect ADB for {ip_addr}: {', '.join(future.error_messages)}")
+        self._update_status_widget(f"    adb restart action completed!")
 
-        for ip_addr in selected_device_ip_addrs:
-            t = threading.Thread(target=run_adb_cmd, args=(ip_addr,), daemon=True)
-            t.start()
-
-        print('FINISHED dispatching adb restart threads!')
-        self.update_status_widget(f"    adb restart action completed!")
-
-    @work(exclusive=True, thread=True)
-    def action_stop_all_offsets(self) -> None:
+    async def action_stop_all_offsets(self) -> None:
         """
         Stops all ongoing offset logging activities.
         """
-        self.stop_recording_offsets(self.devices)
+        self._stop_recording_offsets(self.devices)
 
     def action_toggle_dark(self) -> None:
         """An action to toggle dark mode."""
@@ -628,101 +545,7 @@ class TableApp(App):
         yield Label(self.status_messages[0])
         yield Footer(id = "footer")
 
-def as_colored_text(val, **kwargs):
-    """Convert a value into a Rich colored text representation.
-
-    Args:
-        val: The value to convert.
-        **kwargs: Additional arguments for color styling.
-
-    Returns:
-        Text: A styled Text object based on the value.
-    """
-    if val is None:
-        return '-'
-    elif isinstance(val, bool):
-        return Text(str(val), style=get_style_bool(val, kwargs.get('reverse', False)))
-    elif isinstance(val, numbers.Number):
-        if 'reverse' in kwargs and kwargs['reverse']:
-            return Text(str(val), style=get_style_num(-val, -kwargs['thresh_low'], -kwargs['thresh_high']))
-        else:
-            return Text(str(val), style=get_style_num(val, kwargs['thresh_low'], kwargs['thresh_high']))
-    else:
-        return Text(str(val))
-
-def get_style_num(val, thresh_low, thresh_high) -> Style:
-    """Determine the style for numeric values based on thresholds.
-
-    Args:
-        val (float): The numeric value.
-        thresh_low (float): The lower threshold.
-        thresh_high (float): The upper threshold.
-
-    Returns:
-        Style: The style to apply based on the value.
-    """
-    if val == None:
-        return Style()
-    elif val <= thresh_low:
-        return Style(color="red")
-    elif thresh_high > val > thresh_low:
-        return Style(color="yellow")
-    elif val >= thresh_high:
-        return Style(color="green")
-    else:
-        return Style()
-
-def get_style_bool(val, reverse=False) -> Style:
-    """Determine the style for boolean values.
-
-    Args:
-        val (bool or None): The boolean value to evaluate.
-
-    Returns:
-        Style: The style to apply based on the value:
-             - green if True
-             - red if False
-             - default (empty) if None
-    """
-    if val == None:
-        return Style()
-    elif val:
-        return Style(color="red") if reverse else Style(color="green")
-    else:
-        return Style(color="green") if reverse else Style(color="red")
-
-def time_ago(now: datetime, past: Optional[datetime]) -> str:
-    if not past:
-        return "Never"
-    delta = now - past
-    seconds = delta.total_seconds()
-    if seconds < 5:
-        return "just now"
-    if seconds < 60:
-        return f"{int(seconds):>2}s ago"
-    elif seconds < 3600:
-        minutes = int(seconds // 60)
-        return f"{minutes:>2}m ago"
-    elif seconds < 86400:
-        hours = int(seconds // 3600)
-        return f"{hours:>2}h ago"
-    else:
-        days = int(seconds // 86400)
-        return f"{days:>2}d ago"
-
-def short_recording_id(recording_id: str) -> str:
-    return f"{recording_id[:8]}..." if recording_id else "N/A"
-
-def format_date(date: Optional[datetime]) -> str:
-    if not date:
-        return "N/A"
-    date = date.astimezone()  # Convert to local timezone
-    now = datetime.now().astimezone()  # Current time in local timezone
-    if (now - date).days < 1:
-        return date.strftime("%H:%M:%S")
-    return date.strftime("%Y-%m-%d %H:%M:%S")
-
 if __name__ == "__main__":
-    multiprocessing.set_start_method('spawn', force=True)
+    multiprocessing.set_start_method('spawn', force=True) # This is necessary for cross-OS compatibility
     app = TableApp()
     app.run()
