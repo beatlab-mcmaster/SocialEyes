@@ -1,7 +1,8 @@
 import numbers
 
-from rich.text import Text
 from rich.style import Style
+from rich.text import Text
+
 
 def as_colored_text(val, **kwargs):
     """Convert a value into a Rich colored text representation.
@@ -18,7 +19,7 @@ def as_colored_text(val, **kwargs):
     elif isinstance(val, bool):
         return Text(str(val), style=get_style_bool(val, kwargs.get('reverse', False)))
     elif isinstance(val, numbers.Number):
-        if 'reverse' in kwargs and kwargs['reverse']:
+        if kwargs.get('reverse'):
             return Text(str(val), style=get_style_num(-val, -kwargs['thresh_low'], -kwargs['thresh_high']))
         else:
             return Text(str(val), style=get_style_num(val, kwargs['thresh_low'], kwargs['thresh_high']))

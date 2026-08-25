@@ -4,15 +4,14 @@ device.py
 Author: Alexander Nguyen, Shreshth Saxena
 Purpose: Implements the device class with Android Debug Bridge (ADB) utility functions to monitor the device.
 """
-from pathlib import Path
-from dataclasses import dataclass, field
-from enum import Enum
+import asyncio
 import datetime
 import logging
-import asyncio
-from typing import Dict, Optional
 from collections import deque
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
 
 from .device_clients import DeviceClients
 from .scripts.statistics_schema import DeviceStatistics, Mp4File, NeonRecording
@@ -22,10 +21,10 @@ PHONE_STATISTICS_SCRIPT_PATH_STR = '/storage/self/primary/Documents/SocialEyes/s
 
 @dataclass
 class NeonHardwareIDs:
-    device_name: Optional[str] = None
-    device_id: Optional[str] = None
-    frame_name: Optional[str] = None
-    module_serial: Optional[str] = None
+    device_name: str | None = None
+    device_id: str | None = None
+    frame_name: str | None = None
+    module_serial: str | None = None
 
 class RecordingState(Enum):
     UNKNOWN = 0,
@@ -39,35 +38,35 @@ class RecordingInfo:
     workspace_id: str
     recording_id: str
     state: RecordingState
-    started_at: Optional[datetime.datetime] = None
-    duration: Optional[float] = None
-    details: Optional[Dict[str, Mp4File]] = None
-    red_light_indicator_detected: Optional[bool] = None
+    started_at: datetime.datetime | None = None
+    duration: float | None = None
+    details: dict[str, Mp4File] | None = None
+    red_light_indicator_detected: bool | None = None
 
 @dataclass
 class DeviceState:
     ip_addr: str
     now: datetime.datetime = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
-    ping: Optional[int] = None
-    adb_connection_is_established: Optional[bool] = None
-    neon_api_is_available: Optional[bool] = None
-    neon_hardware_ids: Optional[NeonHardwareIDs] = None
-    active_recordings: Optional[Dict[str, RecordingInfo]] = None
-    latest_statistics: Optional[DeviceStatistics] = None
+    ping: int | None = None
+    adb_connection_is_established: bool | None = None
+    neon_api_is_available: bool | None = None
+    neon_hardware_ids: NeonHardwareIDs | None = None
+    active_recordings: dict[str, RecordingInfo] | None = None
+    latest_statistics: DeviceStatistics | None = None
 
 class Device:
 
     _ip_addr: str
     _port: int
-    _on_change: Optional[Callable[[Optional[DeviceState]], None]] = None
+    _on_change: Callable[[DeviceState | None], None] | None = None
     _target_cycle_period_s: float = 2
 
     # Internal state
-    _background_task: Optional[asyncio.Task]
+    _background_task: asyncio.Task | None
     _statistics_script_pushed: bool
     _statistics_history: deque[DeviceStatistics]
     _state_history: deque[DeviceState]
-    _active_recordings: Optional[Dict[str, RecordingInfo]]
+    _active_recordings: dict[str, RecordingInfo] | None
 
     @property
     def target_cycle_period_s(self) -> float:
@@ -79,31 +78,31 @@ class Device:
         self._target_cycle_period_s = max(1, value)
 
     @property
-    def latest_state(self) -> Optional[DeviceState]:
+    def latest_state(self) -> DeviceState | None:
         """Return the latest device state (including the latest statistics) or None if no state has been recorded yet."""
         return self._state_history[-1] if self._state_history else None
 
     @property
-    def previous_state(self) -> Optional[DeviceState]:
+    def previous_state(self) -> DeviceState | None:
         return self._state_history[-2] if len(self._state_history) > 1 else None
 
     @property
-    def _latest_statistics(self) -> Optional[DeviceStatistics]:
+    def _latest_statistics(self) -> DeviceStatistics | None:
         return self._statistics_history[-1] if self._statistics_history else None
 
     @property
-    def _previous_statistics(self) -> Optional[DeviceStatistics]:
+    def _previous_statistics(self) -> DeviceStatistics | None:
         return self._statistics_history[-2] if len(self._statistics_history) > 1 else None
 
     @property
-    def active_recordings(self) -> Optional[Dict[str, RecordingInfo]]:
+    def active_recordings(self) -> dict[str, RecordingInfo] | None:
         """Return the latest active recordings (i.e., recording directories that contain a temp_*.json) or None if no statistics have been collected yet."""
         return self._active_recordings
 
     def __init__(self, 
                  ip_addr: str, 
                  port: int = 5555,
-                 on_change: Optional[Callable[[Optional[DeviceState]], None]] = None,
+                 on_change: Callable[[DeviceState | None], None] | None = None,
                  clients: DeviceClients = DeviceClients()
     ):
         self._ip_addr = ip_addr
@@ -193,23 +192,23 @@ class Device:
         response = await self._clients.push_statistics_script(self._ip_addr, source_path=REPO_STATISTICS_SCRIPT_PATH_STR, dest_path=PHONE_STATISTICS_SCRIPT_PATH_STR, port=self._port)
         return response.result if response.result is not None else False
 
-    async def _fetch_statistics(self) -> Optional[DeviceStatistics]:
+    async def _fetch_statistics(self) -> DeviceStatistics | None:
         response = await self._clients.fetch_socialeyes_statistics(self._ip_addr, self._port)
         return response.result
 
-    async def _determine_ping(self) -> Optional[int]:
+    async def _determine_ping(self) -> int | None:
         ping_response = await self._clients.ping_device(self._ip_addr)
         return ping_response.result
 
-    async def _determine_adb_connection_is_established(self) -> Optional[bool]:
+    async def _determine_adb_connection_is_established(self) -> bool | None:
         response = await self._clients.check_adb_connection(self._ip_addr, self._port)
         return response.result
 
-    async def _determine_neon_api_is_available(self) -> Optional[bool]:
+    async def _determine_neon_api_is_available(self) -> bool | None:
         response = await self._clients.is_neon_api_accessible(self._ip_addr)
         return response.result
 
-    async def _determine_neon_hardware_ids(self) -> Optional[NeonHardwareIDs]:
+    async def _determine_neon_hardware_ids(self) -> NeonHardwareIDs | None:
         response = await self._clients.get_neon_hardware_ids(self._ip_addr)
         return NeonHardwareIDs(
             device_name=response.device_name,
@@ -218,11 +217,11 @@ class Device:
             module_serial=response.module_serial
         )
 
-    async def _determine_red_light_indicators_detected(self, workspace_id: str, recording_id: str) -> Optional[bool]:
+    async def _determine_red_light_indicators_detected(self, workspace_id: str, recording_id: str) -> bool | None:
         response = await self._clients.check_red_light_flashing_indicators(self._ip_addr, self._port, workspace_id, recording_id)
         return response.result
 
-    def _determine_recording_state(self, neon_recording: NeonRecording, old_recording_info: Optional[RecordingInfo]) -> RecordingState:
+    def _determine_recording_state(self, neon_recording: NeonRecording, old_recording_info: RecordingInfo | None) -> RecordingState:
         result = None
         if old_recording_info is None:
             # If we haven't seen this recording before, we don't know if it's still recording or not
@@ -247,7 +246,7 @@ class Device:
                     break
         return any_size_increased
 
-    async def _determine_active_recordings(self) -> Optional[Dict[str, RecordingInfo]]:
+    async def _determine_active_recordings(self) -> dict[str, RecordingInfo] | None:
         result = None
         if self._latest_statistics is not None and self._latest_statistics.neon.recordings is not None:
             result = {}

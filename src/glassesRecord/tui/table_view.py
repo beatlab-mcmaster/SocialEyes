@@ -1,11 +1,12 @@
-from typing import Any
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
+from typing import Any
 
 from textual.widgets._data_table import ColumnKey, RowKey
 
 from .device_state import DeviceStateField
 from .widgets import SelectableRowsDataTable
+
 
 @dataclass
 class Column:

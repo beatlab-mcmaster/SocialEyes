@@ -1,15 +1,16 @@
-from dataclasses import dataclass
-from typing import Callable, Optional, Dict
+import asyncio
+import datetime
 import logging
 import logging.handlers
 import multiprocessing
 import multiprocessing.connection
 import multiprocessing.synchronize
-import asyncio
-import datetime
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from .device import DeviceState
 from .device_worker import device_worker_process
+
 
 @dataclass
 class DeviceConfig:
@@ -43,14 +44,14 @@ class DeviceManager:
 
     _logger: logging.Logger
     _logger_queue: multiprocessing.Queue # Queue for logging messages from device worker processes
-    _logger_queue_listener: Optional[logging.handlers.QueueListener]
+    _logger_queue_listener: logging.handlers.QueueListener | None
 
-    _workers: Dict[str, DeviceWorkerHandle] # Key: ip_addr, Value: DeviceWorkerHandle instance
+    _workers: dict[str, DeviceWorkerHandle] # Key: ip_addr, Value: DeviceWorkerHandle instance
     
-    _collect_states_task: Optional[asyncio.Task]
+    _collect_states_task: asyncio.Task | None
     _collect_states_stop_event: asyncio.Event
 
-    _device_states: Dict[str, DeviceState] # Key: ip_addr, Value: DeviceState instance
+    _device_states: dict[str, DeviceState] # Key: ip_addr, Value: DeviceState instance
 
     @property
     def devices(self) -> list[DeviceConfig]:
@@ -99,10 +100,10 @@ class DeviceManager:
         for _, worker in self._workers.items():
             self._stop_worker(worker, join_timeout)
 
-    def get_device_state(self, ip_addr: str) -> Optional[DeviceState]:
+    def get_device_state(self, ip_addr: str) -> DeviceState | None:
         return self._device_states.get(ip_addr)
 
-    def get_all_device_states(self) -> Dict[str, DeviceState]:
+    def get_all_device_states(self) -> dict[str, DeviceState]:
         return self._device_states.copy()
 
     # -------------------------------------------------------

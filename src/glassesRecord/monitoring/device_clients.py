@@ -1,14 +1,16 @@
-import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
-from ..clients.ping import ping_device
-from ..clients.adb import check_adb_connection, check_statistics_script_exists, push_statistics_script, fetch_socialeyes_statistics
-from ..clients.neon_http import is_neon_api_accessible, get_neon_hardware_ids
+from ..clients.adb import (
+    check_adb_connection,
+    check_statistics_script_exists,
+    fetch_socialeyes_statistics,
+    push_statistics_script,
+)
 from ..clients.neon_adb import check_red_light_flashing_indicators
+from ..clients.neon_http import get_neon_hardware_ids, is_neon_api_accessible
+from ..clients.ping import ping_device
+
 
 @dataclass
 class DeviceClients:

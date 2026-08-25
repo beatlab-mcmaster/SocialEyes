@@ -1,6 +1,7 @@
-from .core import SimpleClientResponse, fetch_command_output
 import os
 import re
+
+from .core import SimpleClientResponse, fetch_command_output
 
 PING_PATTERN_WINDOWS = re.compile(r'time=([0-9.]+)ms TTL=\d+')
 PING_PATTERN = re.compile(r'ttl=\d+\s+time=([0-9.]+)\s+ms')

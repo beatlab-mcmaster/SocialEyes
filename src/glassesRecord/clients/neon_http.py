@@ -1,9 +1,9 @@
-import re
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 
-from .http import fetch_http_get_response, fetch_http_post_response
 from .core import ClientResponse, SimpleClientResponse
+from .http import fetch_http_get_response, fetch_http_post_response
+
 
 async def is_neon_api_accessible(ip_addr: str) -> SimpleClientResponse[bool]:
     neon_api_is_available = None
@@ -46,7 +46,7 @@ async def get_neon_hardware_ids(ip_addr: str) -> NeonHardwareIdsResponse:
                         frame_name = str(e_data['frame_name'])
                         module_serial = str(e_data['module_serial'])
         except json.JSONDecodeError as e:
-            errors.append(f"JSON decode error: {str(e)}")
+            errors.append(f"JSON decode error: {e!s}")
 
     return NeonHardwareIdsResponse(
         timeout_occurred=response.timeout_occurred,
@@ -67,7 +67,7 @@ async def start_neon_recording(ip_addr: str) -> SimpleClientResponse[str | None]
             if 'message' in res_json and res_json['message'] == 'Success' and 'result' in res_json:
                 recording_id = str(res_json['result']['recording_id'])
         except json.JSONDecodeError as e:
-            errors.append(f"JSON decode error: {str(e)}")
+            errors.append(f"JSON decode error: {e!s}")
     return SimpleClientResponse(
         timeout_occurred=response.timeout_occurred,
         error_messages=errors,
@@ -84,7 +84,7 @@ async def stop_and_save_neon_recording(ip_addr: str) -> SimpleClientResponse[str
             if 'message' in res_json and res_json['message'] == 'Success' and 'result' in res_json:
                 recording_id = str(res_json['result']['recording_id'])
         except json.JSONDecodeError as e:
-            errors.append(f"JSON decode error: {str(e)}")
+            errors.append(f"JSON decode error: {e!s}")
     return SimpleClientResponse(
         timeout_occurred=response.timeout_occurred,
         error_messages=errors,
@@ -101,7 +101,7 @@ async def cancel_neon_recording(ip_addr: str) -> SimpleClientResponse[str | None
             if 'message' in res_json and res_json['message'] == 'Success' and 'result' in res_json:
                 recording_id = str(res_json['result']['recording_id'])
         except json.JSONDecodeError as e:
-            errors.append(f"JSON decode error: {str(e)}")
+            errors.append(f"JSON decode error: {e!s}")
     return SimpleClientResponse(
         timeout_occurred=response.timeout_occurred,
         error_messages=errors,

@@ -2,8 +2,9 @@ import asyncio
 import datetime
 import re
 
-from .adb import ADB_PATH
-from .core import SimpleClientResponse, fetch_command_output, TIMEOUT_SECONDS
+from src.glassesRecord.clients.adb import fetch_adb_command_output
+
+from .core import TIMEOUT_SECONDS, SimpleClientResponse
 
 NEON_COMPANION_APP_PACKAGE_NAME = "com.pupillabs.neoncomp"
 TASK_ID_PATTERN = re.compile(r"taskId=(\d+): com.pupillabs.neoncomp")
@@ -11,8 +12,8 @@ TASK_ID_PATTERN = re.compile(r"taskId=(\d+): com.pupillabs.neoncomp")
 async def check_red_light_flashing_indicators(ip_addr: str, port: int, workspace_id: str, recording_id: str) -> SimpleClientResponse[bool]:
     indicator_detected = None
         
-    response = await fetch_command_output(
-        f'{ADB_PATH} -s {ip_addr}:{port} shell grep -e "raw has not changed" /storage/self/primary/Documents/Neon/{workspace_id}/{recording_id}/android.log'
+    response = await fetch_adb_command_output(
+        f'-s {ip_addr}:{port} shell grep -e "raw has not changed" /storage/self/primary/Documents/Neon/{workspace_id}/{recording_id}/android.log'
     )
     if response.stdout is not None and len(response.stdout) > 0:
         for line in response.stdout.splitlines():
@@ -29,8 +30,8 @@ async def check_red_light_flashing_indicators(ip_addr: str, port: int, workspace
 
 async def get_neon_companion_app_task_id(ip_addr: str, port: int) -> SimpleClientResponse[int | None]:
     task_id = None
-    response = await fetch_command_output(
-        f'{ADB_PATH} -s {ip_addr}:{port} shell am stack list | grep {NEON_COMPANION_APP_PACKAGE_NAME}'
+    response = await fetch_adb_command_output(
+        f'-s {ip_addr}:{port} shell am stack list | grep {NEON_COMPANION_APP_PACKAGE_NAME}'
     )
     if response.stdout is not None and len(response.stdout) > 0:
         matches = TASK_ID_PATTERN.search(response.stdout)
@@ -44,8 +45,8 @@ async def get_neon_companion_app_task_id(ip_addr: str, port: int) -> SimpleClien
 
 async def stop_neon_companion_app(ip_addr: str, port: int, wait_until_stopped=True) -> SimpleClientResponse[bool]:
     stopped = None # None = maybe
-    response = await fetch_command_output(
-        f'{ADB_PATH} -s {ip_addr}:{port} shell am force-stop {NEON_COMPANION_APP_PACKAGE_NAME}'
+    response = await fetch_adb_command_output(
+        f'-s {ip_addr}:{port} shell am force-stop {NEON_COMPANION_APP_PACKAGE_NAME}'
     )
     timeout_occurred = response.timeout_occurred
     if wait_until_stopped:
@@ -69,8 +70,8 @@ async def stop_neon_companion_app(ip_addr: str, port: int, wait_until_stopped=Tr
 
 async def start_neon_companion_app(ip_addr: str, port: int, wait_until_started=True) -> SimpleClientResponse[bool]:
     started = None # None = maybe
-    response = await fetch_command_output(
-        f'{ADB_PATH} -s {ip_addr}:{port} shell am start -n {NEON_COMPANION_APP_PACKAGE_NAME}/com.pupillabs.neoncomp.ui.launch.MainInvisibleActivity'
+    response = await fetch_adb_command_output(
+        f'-s {ip_addr}:{port} shell am start -n {NEON_COMPANION_APP_PACKAGE_NAME}/com.pupillabs.neoncomp.ui.launch.MainInvisibleActivity'
     )
     timeout_occurred = response.timeout_occurred
     if wait_until_started:

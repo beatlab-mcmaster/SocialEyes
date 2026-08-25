@@ -4,15 +4,15 @@ Author: Areez Vizram, Alexander Nguyen, Shreshth Saxena
 Purpose: Implemets the OffsetLogger class to log the time offset of each device to a log file
 """
 
-import logging
-import time
-import csv
-from typing import List, Optional
 import asyncio
-from datetime import datetime
+import csv
+import logging
 import os
+import time
+from datetime import datetime
 
-from ..clients.neon_time_echo import estimate_time_offset, NeonTimeOffsetResponse
+from ..clients.neon_time_echo import NeonTimeOffsetResponse, estimate_time_offset
+
 
 class OffsetLogger:
     """This class logs the time offset for a list of devices (or just one) to a log file"""
@@ -21,15 +21,15 @@ class OffsetLogger:
 
     _log_file: str
     _log_interval: int
-    _device_ips: List[str]
-    _task: Optional[asyncio.Task]
+    _device_ips: list[str]
+    _task: asyncio.Task | None
 
     @property
     def log_file(self) -> str:
         """Returns the path to the log file."""
         return self._log_file
 
-    def __init__(self, device_ips: List[str], log_dir: str, log_interval: int = 10):
+    def __init__(self, device_ips: list[str], log_dir: str, log_interval: int = 10):
         """Initializes the OffsetLogger instance.
 
         Args:
@@ -91,7 +91,7 @@ class OffsetLogger:
             elif isinstance(result, Exception):
                 self._logger.error(f"Failed to log offset for device {ip_addr}", exc_info=result)
 
-    def _log_to_file(self, device_name: str, mean_offset: Optional[float], mean_duration: Optional[float]):
+    def _log_to_file(self, device_name: str, mean_offset: float | None, mean_duration: float | None):
         """Logs the time offset and roundtrip duration to the log file. If either value is None, it will be logged as an empty field.
 
         Args:

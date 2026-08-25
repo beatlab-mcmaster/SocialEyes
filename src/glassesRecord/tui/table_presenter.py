@@ -1,12 +1,12 @@
-from typing import Callable, Dict, Any
-from datetime import timezone, datetime
+from collections.abc import Callable
+from datetime import datetime, timezone
+from typing import Any
 
-from ..neon.device import DeviceState
-from .device_state import DeviceStateSnapshot, DeviceStateField
+from .device_state import DeviceState, DeviceStateField, DeviceStateSnapshot
 from .formatting.rich_text import as_colored_text
 from .formatting.text import time_ago
 
-_FORMATTERS: Dict[DeviceStateField, Callable[[Any], Any]] = {
+_FORMATTERS: dict[DeviceStateField, Callable[[Any], Any]] = {
     DeviceStateField.PING: lambda v: as_colored_text(v, thresh_low=200, thresh_high=500, reverse=True),
     DeviceStateField.ADB: as_colored_text,
     DeviceStateField.APP_ACTIVE: as_colored_text,
@@ -22,12 +22,12 @@ _FORMATTERS: Dict[DeviceStateField, Callable[[Any], Any]] = {
 
 class DeviceTablePresenter:
 
-    _current_snapshots: Dict[str, DeviceStateSnapshot]
+    _current_snapshots: dict[str, DeviceStateSnapshot]
 
     def __init__(self):
-        self._current_snapshots: Dict[str, DeviceStateSnapshot] = {}
+        self._current_snapshots: dict[str, DeviceStateSnapshot] = {}
 
-    def diff_updates(self, states: Dict[str, DeviceState]) -> list[tuple[str, DeviceStateField, Any]]:
+    def diff_updates(self, states: dict[str, DeviceState]) -> list[tuple[str, DeviceStateField, Any]]:
         """
         Compares the current `DeviceState`s with the previously rendered states and identifies any changes.
         

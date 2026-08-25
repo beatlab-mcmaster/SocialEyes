@@ -1,9 +1,10 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-from .formatting.text import short_recording_id, format_date
 from ..monitoring.device import DeviceState
+from .formatting.text import format_date, short_recording_id
+
 
 class DeviceStateField(str, Enum):
     IP = 'ip'
@@ -28,7 +29,7 @@ class DeviceStateField(str, Enum):
     PL_REC = 'PL_Rec'
     LAST_UPDATED = 'last_updated'
 
-def format_recording_status(active_recordings: Optional[dict]) -> str:
+def format_recording_status(active_recordings: dict | None) -> str:
     if not active_recordings:
         return ''
     by_start_time = dict(sorted(active_recordings.items(), key=lambda x: x[1].started_at or datetime.min, reverse=True))
@@ -41,8 +42,8 @@ class DeviceStateSnapshot:
     Provides methods to compare snapshots and retrieve :class:`~glassesRecord.device_state.DeviceStateField` values.
     """
 
-    def __init__(self, state: Optional[DeviceState]):
-        self._data: Dict[DeviceStateField, Any] = {}
+    def __init__(self, state: DeviceState | None):
+        self._data: dict[DeviceStateField, Any] = {}
         if state is not None:
             self._data[DeviceStateField.IP] = state.ip_addr
             self._data[DeviceStateField.PING] = state.ping
@@ -64,7 +65,7 @@ class DeviceStateSnapshot:
             for field in DeviceStateField:
                 self._data[field] = None
 
-    def get_changed_fields(self, old: Optional['DeviceStateSnapshot']) -> Dict[DeviceStateField, Any]:
+    def get_changed_fields(self, old: Optional['DeviceStateSnapshot']) -> dict[DeviceStateField, Any]:
         """
         Compares the current snapshot with an old snapshot and returns a dictionary of fields that have changed.
         

@@ -7,8 +7,9 @@ Purpose: Implements the main interface to monitor and control multiple devices i
 
 import multiprocessing
 
-from .config import config
 from .app import TableApp, TableAppConfig
+from .config import config
+
 
 def build_ip_addresses_from_config(config: dict) -> list[str]: 
     """
@@ -46,7 +47,7 @@ if __name__ == "__main__":
         device_ips=build_ip_addresses_from_config(config),
         is_single_session_mode=config.get("single_session_mode", False),
         status_log_max_len=config["logs"]["TUI_messages_len"],
-        offset_logger_interval=config["logs"]["offset_logger_interval"],
+        offset_logger_interval=config["logs"]["interval"],
     )
     app = TableApp(table_app_config)
     app.run()

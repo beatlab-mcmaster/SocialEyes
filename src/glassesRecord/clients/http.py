@@ -1,7 +1,10 @@
-import aiohttp
 import asyncio
 from dataclasses import dataclass
-from .core import ClientResponse, TIMEOUT_SECONDS
+
+import aiohttp
+
+from .core import TIMEOUT_SECONDS, ClientResponse
+
 
 @dataclass
 class HttpResponse(ClientResponse):

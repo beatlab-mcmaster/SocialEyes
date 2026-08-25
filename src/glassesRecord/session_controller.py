@@ -1,25 +1,22 @@
 import asyncio
-from dataclasses import dataclass
 import json
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict
 
 from .clients.adb import connect_adb
 from .clients.core import SimpleClientResponse
+from .clients.neon_adb import start_neon_companion_app, stop_neon_companion_app
 from .clients.neon_http import (
     cancel_neon_recording,
     start_neon_recording,
     stop_and_save_neon_recording,
 )
-from .clients.neon_adb import (
-    start_neon_companion_app,
-    stop_neon_companion_app
-)
 from .monitoring.device import DeviceState
 from .monitoring.device_manager import DeviceConfig, DeviceManager
 from .monitoring.offset_logger import OffsetLogger
+
 
 @dataclass
 class SessionControllerConfig:
@@ -35,9 +32,7 @@ class SessionController:
 
     _logger: logging.Logger
 
-    _session_id: str
-    _session_dir: str
-    _is_single_session_mode: bool
+    _config: SessionControllerConfig
 
     _events_file: str
 
@@ -51,12 +46,12 @@ class SessionController:
     @property
     def session_id(self) -> str:
         """Returns the unique identifier for the current session."""
-        return self._session_id
+        return self._config.session_id
 
     @property
     def session_dir(self) -> str:
         """Returns the directory path where session-related files are stored."""
-        return self._session_dir
+        return self._config.session_dir
 
     @property
     def device_ip_addrs(self) -> list[str]:
@@ -92,7 +87,7 @@ class SessionController:
     def stop_device_monitoring(self):
         self._device_manager.stop_all()
     
-    def get_all_device_states(self) -> Dict[str, DeviceState]:
+    def get_all_device_states(self) -> dict[str, DeviceState]:
         return self._device_manager.get_all_device_states()
 
     # -------------------------------------------------------
@@ -109,10 +104,10 @@ class SessionController:
             List of device IP addresses to start recording on. If empty, recording will be started on all devices.
         """
         # Start offset logging
-        if self._is_single_session_mode:
+        if self._config.is_single_session_mode:
             # One offset logger for all devices
             if not self._offset_loggers.get(SessionController.OFFSET_LOGGER_ALL_KEY):
-                ol = OffsetLogger(device_ips, log_dir=self._session_dir, log_interval=self._offset_logger_interval)
+                ol = OffsetLogger(device_ips, log_dir=self._config.session_dir, log_interval=self._offset_logger_interval)
                 self._logger.info(f"Starting Offset logger at {ol.log_file}")
                 ol.start_logging()
                 self._offset_loggers[SessionController.OFFSET_LOGGER_ALL_KEY] = ol
@@ -120,13 +115,13 @@ class SessionController:
             # Separate offset logger for each device
             for dev in device_ips:
                 if not self._offset_loggers.get(dev):
-                    ol = OffsetLogger([dev], log_dir=os.path.join(self._session_dir, str(dev)), log_interval=self._offset_logger_interval)
+                    ol = OffsetLogger([dev], log_dir=os.path.join(self._config.session_dir, str(dev)), log_interval=self._offset_logger_interval)
                     self._logger.info(f"Starting Offset logger at {ol.log_file} for device: {dev}")
                     ol.start_logging()
                     self._offset_loggers[dev] = ol
 
         # Start recording
-        if self._is_single_session_mode:
+        if self._config.is_single_session_mode:
             if len(device_ips) != 0:
                 self._logger.warning("In single session mode, device_ips parameter is ignored. Recording will be started on all registered devices.")
             device_ips = [d.ip_addr for d in self._device_manager.devices]
@@ -237,7 +232,7 @@ class SessionController:
         """Stop recording on the specified devices."""
 
         # Stop offset logging
-        if self._is_single_session_mode:
+        if self._config.is_single_session_mode:
             if self._offset_loggers.get(SessionController.OFFSET_LOGGER_ALL_KEY):
                 await self._offset_loggers[SessionController.OFFSET_LOGGER_ALL_KEY].stop_logging()
                 del self._offset_loggers[SessionController.OFFSET_LOGGER_ALL_KEY]
@@ -247,10 +242,10 @@ class SessionController:
                 if self._offset_loggers.get(dev):
                     await self._offset_loggers[dev].stop_logging()
                     del self._offset_loggers[dev]
-            self._logger.info("Stopped offset logging for devices: {}".format(device_ips))
+            self._logger.info(f"Stopped offset logging for devices: {device_ips}")
 
         # Stop recording
-        if self._is_single_session_mode:
+        if self._config.is_single_session_mode:
             if len(device_ips) != 0:
                 self._logger.warning("In single session mode, device_ips parameter is ignored. Recording will be stopped on all registered devices.")
             device_ips = [d.ip_addr for d in self._device_manager.devices]

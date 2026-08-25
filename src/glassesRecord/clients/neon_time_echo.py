@@ -1,8 +1,9 @@
 
 from dataclasses import dataclass
-from .core import ClientResponse
 
 from pupil_labs.realtime_api.time_echo import TimeOffsetEstimator
+
+from .core import ClientResponse
 
 TIME_ECHO_PORT = 12321
 

@@ -1,31 +1,21 @@
 import logging
-from typing import Any, Callable, Coroutine, Dict, Optional
-from dataclasses import dataclass
+from collections.abc import Callable, Coroutine
+from typing import Any
 
-from .tui.table_view import Column, DeviceStateField
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.widgets import Footer, Input, Label
 
-from .app_utils import configure_logging, create_session_controller, Theme
-from .session_controller import SessionController
+from .app_config import TableAppConfig
+from .app_utils import Theme, configure_logging, create_session_controller
 from .monitoring.device import DeviceState
-from .tui.widgets import SelectableRowsDataTable
-from .tui.table_controller import DeviceTableController
+from .session_controller import SessionController
 from .tui.status_log import StatusLogController
+from .tui.table_controller import DeviceTableController
+from .tui.table_view import Column, DeviceStateField
+from .tui.widgets import SelectableRowsDataTable
 
-@dataclass
-class TableAppConfig:
-    log_level: str # INFO, DEBUG, ...
-    log_dir: str # Directory to store logs
-
-    device_ips: list[str] # List of device IP addresses to monitor
-
-    is_single_session_mode: bool
-    status_log_max_len: int
-
-    offset_logger_interval: int
 
 class TableApp(App):
 
@@ -61,21 +51,21 @@ class TableApp(App):
         Column(name="Red light indic.", field=DeviceStateField.RED_LIGHT_INDICATORS),
     ]
 
-    _config: TableAppConfig
+    _config: TableAppConfig 
     _session_controller: SessionController
-    _logger: logging.Logger
+    _table_app_logger: logging.Logger # _logger is already used by textual.App
 
     # Device table widget
-    _table_widget: Optional[SelectableRowsDataTable]
-    _table_controller: Optional[DeviceTableController]
-    _device_states: reactive[Dict[str, DeviceState]] = reactive({}, recompose=False)
+    _table_widget: SelectableRowsDataTable | None
+    _table_controller: DeviceTableController | None
+    _device_states: reactive[dict[str, DeviceState]] = reactive({}, recompose=False)
 
     # Status log widget
-    _status_log_widget: Optional[Label]
+    _status_log_widget: Label | None
     _status_log_controller: StatusLogController
 
     # Events logging input widget
-    _events_input_widget: Optional[Input]
+    _events_input_widget: Input | None
 
     def __init__(self, config: TableAppConfig):
         super().__init__()
@@ -86,7 +76,7 @@ class TableApp(App):
             self.exit(return_code=1)
             return
         self._session_controller = session_controller
-        self._logger = configure_logging(session_controller, config)
+        self._table_app_logger = configure_logging(session_controller, config)
         self._status_log_controller = StatusLogController(max_len=config.status_log_max_len)
         self._config = config
 
@@ -157,7 +147,7 @@ class TableApp(App):
         # Clear box
         self._events_input_widget.value = ""
 
-    async def watch_device_states(self, states: Dict[str, DeviceState]) -> None:
+    async def watch_device_states(self, states: dict[str, DeviceState]) -> None:
         assert self._table_controller is not None, "Device table controller is not initialized."
 
         # Apply updates to TUI
@@ -237,8 +227,8 @@ class TableApp(App):
             await coroutine_fn(selected_device_ip_addrs)
             self._status_widget_push_message(f"    {verb} action completed!")
         except Exception as e:
-            self._logger.exception(f"{verb} action failed")
-            self._status_widget_push_message(f"    {verb} action failed: {str(e)}")
+            self._table_app_logger.exception(f"{verb} action failed")
+            self._status_widget_push_message(f"    {verb} action failed: {e!s}")
 
     def _update_device_states(self) -> None:
         self._device_states = self._session_controller.get_all_device_states()

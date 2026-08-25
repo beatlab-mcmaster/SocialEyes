@@ -1,7 +1,7 @@
-from typing import Optional
 from datetime import datetime
 
-def time_ago(now: datetime, past: Optional[datetime], exact_seconds_threshold: int=5) -> str:
+
+def time_ago(now: datetime, past: datetime | None, exact_seconds_threshold: int=5) -> str:
     """
     Returns a human-readable string representing the time elapsed since the given past datetime.
 
@@ -37,7 +37,7 @@ def time_ago(now: datetime, past: Optional[datetime], exact_seconds_threshold: i
         days = int(seconds // 86400)
         return f"{days:>2}d ago"
 
-def format_date(date: Optional[datetime]) -> str:
+def format_date(date: datetime | None) -> str:
     if not date:
         return "N/A"
     date = date.astimezone()  # Convert to local timezone

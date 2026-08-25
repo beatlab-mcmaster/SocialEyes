@@ -1,13 +1,20 @@
-import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
-from .core import exists_as_path_or_command, SimpleClientResponse, fetch_command_output
-from ..monitoring.scripts.statistics_schema import DeviceStatistics
 import json
+import os
 
-ADB_PATH = os.environ.get('ADB_PATH', 'adb')
-assert exists_as_path_or_command(ADB_PATH), f"ADB_PATH '{ADB_PATH}' is not a valid path or command"
+from ..monitoring.scripts.statistics_schema import DeviceStatistics
+from .core import (
+    TIMEOUT_SECONDS,
+    ProcessResponse,
+    SimpleClientResponse,
+    fetch_command_output,
+)
+
+
+def get_default_adb_path() -> str:
+    return os.environ.get('ADB_PATH', 'adb')
+
+async def fetch_adb_command_output(cmd, timeout=TIMEOUT_SECONDS) -> ProcessResponse:
+    return await fetch_command_output(f'{get_default_adb_path()} {cmd}', timeout=timeout)
 
 async def check_adb_connection(ip_addr: str, port: int = 5555) -> SimpleClientResponse[bool]:
     connection_established = None
@@ -15,7 +22,8 @@ async def check_adb_connection(ip_addr: str, port: int = 5555) -> SimpleClientRe
     errors = []
     
     try:
-        response = await fetch_command_output(f'{ADB_PATH} devices')
+        adb_path = get_default_adb_path()
+        response = await fetch_adb_command_output('devices')
         timeout_occurred = response.timeout_occurred
         errors.extend(response.error_messages)
         connection_established = False
@@ -33,7 +41,7 @@ async def check_adb_connection(ip_addr: str, port: int = 5555) -> SimpleClientRe
 
 async def fetch_socialeyes_statistics(ip_addr: str, port: int = 5555) -> SimpleClientResponse[DeviceStatistics | None]:
     statistics = None
-    response = await fetch_command_output(f'{ADB_PATH} -s {ip_addr}:{port} shell sh /storage/self/primary/Documents/SocialEyes/statistics.sh')
+    response = await fetch_adb_command_output(f'-s {ip_addr}:{port} shell sh /storage/self/primary/Documents/SocialEyes/statistics.sh')
     timeout_occurred = response.timeout_occurred
     errors = response.error_messages.copy()
     if response.return_code == 0:
@@ -55,7 +63,7 @@ async def fetch_socialeyes_statistics(ip_addr: str, port: int = 5555) -> SimpleC
     )
 
 async def check_statistics_script_exists(ip_addr: str, script_path: str, port: int = 5555,) -> SimpleClientResponse[bool]:
-    response = await fetch_command_output(f'{ADB_PATH} -s {ip_addr}:{port} shell ls {script_path}')
+    response = await fetch_adb_command_output(f'-s {ip_addr}:{port} shell ls {script_path}')
     return SimpleClientResponse(
         timeout_occurred=response.timeout_occurred,
         error_messages=response.error_messages.copy(),
@@ -63,7 +71,7 @@ async def check_statistics_script_exists(ip_addr: str, script_path: str, port: i
     )
 
 async def push_statistics_script(ip_addr: str, source_path: str, dest_path: str, port: int = 5555) -> SimpleClientResponse[bool]:
-    response = await fetch_command_output(f'{ADB_PATH} -s {ip_addr}:{port} push {source_path} {dest_path}')
+    response = await fetch_adb_command_output(f'-s {ip_addr}:{port} push {source_path} {dest_path}')
     return SimpleClientResponse(
         timeout_occurred=response.timeout_occurred,
         error_messages=response.error_messages.copy(),
@@ -71,7 +79,7 @@ async def push_statistics_script(ip_addr: str, source_path: str, dest_path: str,
     )
 
 async def connect_adb(ip_addr: str, port: int = 5555) -> SimpleClientResponse[bool]:
-    response = await fetch_command_output(f'{ADB_PATH} connect {ip_addr}:{port}')
+    response = await fetch_adb_command_output(f'connect {ip_addr}:{port}')
     timeout_occurred = response.timeout_occurred
     errors = response.error_messages.copy()
     connection_successful = False
