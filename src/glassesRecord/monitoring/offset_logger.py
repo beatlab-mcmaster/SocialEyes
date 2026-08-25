@@ -71,9 +71,14 @@ class OffsetLogger:
 
     async def _run(self):
         while not self._stop_event.is_set():
-            now = datetime.now()
-            await self._estimate_offsets()
-            elapsed = (datetime.now() - now).total_seconds()
+            now = asyncio.get_event_loop().time()
+            try:
+                await self._estimate_offsets()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._logger.exception("Unexpected error while logging offsets")
+            elapsed = asyncio.get_event_loop().time() - now
             timeout = max(0, self._log_interval - elapsed)
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=timeout)

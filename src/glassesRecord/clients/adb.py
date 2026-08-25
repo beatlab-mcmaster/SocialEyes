@@ -1,6 +1,8 @@
 import json
 import os
 
+import pydantic
+
 from ..monitoring.scripts.statistics_schema import DeviceStatistics
 from .core import (
     TIMEOUT_SECONDS,
@@ -14,15 +16,40 @@ def get_default_adb_path() -> str:
     return os.environ.get('ADB_PATH', 'adb')
 
 async def fetch_adb_command_output(cmd, timeout=TIMEOUT_SECONDS) -> ProcessResponse:
+    """
+    Fetches the output of an ADB command.
+
+    Parameters
+    ----------
+    cmd : str
+        The ADB command to execute. Omit the 'adb' prefix; it will be added automatically.
+    timeout : int
+        The maximum time to wait for the command to complete, in seconds.
+
+    Returns
+    -------
+    ProcessResponse
+        The result of executing the command, including stdout, stderr, and return code.
+    """
     return await fetch_command_output(f'{get_default_adb_path()} {cmd}', timeout=timeout)
 
 async def check_adb_connection(ip_addr: str, port: int = 5555) -> SimpleClientResponse[bool]:
+    """
+    Checks if an ADB connection to the specified IP address and port is established.
+    
+    Returns
+    -------
+    SimpleClientResponse[bool]
+        A response object containing:
+        - timeout_occurred: True if the command timed out, False otherwise.
+        - error_messages: A list of error messages encountered during the check operation.
+        - result: True if the connection is established, False otherwise.
+    """
     connection_established = None
     timeout_occurred = False
     errors = []
     
     try:
-        adb_path = get_default_adb_path()
         response = await fetch_adb_command_output('devices')
         timeout_occurred = response.timeout_occurred
         errors.extend(response.error_messages)
@@ -40,18 +67,29 @@ async def check_adb_connection(ip_addr: str, port: int = 5555) -> SimpleClientRe
     )
 
 async def fetch_socialeyes_statistics(ip_addr: str, port: int = 5555) -> SimpleClientResponse[DeviceStatistics | None]:
+    """
+    Fetches the SocialEyes statistics from the device at the specified IP address and port.
+    
+    Returns
+    -------
+    SimpleClientResponse[DeviceStatistics | None]
+        A response object containing:
+        - timeout_occurred: True if the command timed out, False otherwise.
+        - error_messages: A list of error messages encountered during the fetch operation.
+        - result: A DeviceStatistics object if the fetch was successful, None otherwise.
+    """
     statistics = None
     response = await fetch_adb_command_output(f'-s {ip_addr}:{port} shell sh /storage/self/primary/Documents/SocialEyes/statistics.sh')
     timeout_occurred = response.timeout_occurred
     errors = response.error_messages.copy()
-    if response.return_code == 0:
+    if response.return_code == 0 and not timeout_occurred:
         try:
             if response.stdout is None or len(response.stdout) == 0:
                 errors.append('Received empty output from statistics.sh script')
                 
             else:
                 statistics = DeviceStatistics.model_validate_json(response.stdout)
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, pydantic.ValidationError) as e:
             errors.append(str(e))
     else:
         errors.append(f'Failed to execute statistics.sh script: rc={response.return_code}, res={response.stdout}, err={response.stderr}')
@@ -62,7 +100,7 @@ async def fetch_socialeyes_statistics(ip_addr: str, port: int = 5555) -> SimpleC
         result=statistics
     )
 
-async def check_statistics_script_exists(ip_addr: str, script_path: str, port: int = 5555,) -> SimpleClientResponse[bool]:
+async def check_statistics_script_exists(ip_addr: str, script_path: str, port: int = 5555) -> SimpleClientResponse[bool]:
     response = await fetch_adb_command_output(f'-s {ip_addr}:{port} shell ls {script_path}')
     return SimpleClientResponse(
         timeout_occurred=response.timeout_occurred,
@@ -71,6 +109,17 @@ async def check_statistics_script_exists(ip_addr: str, script_path: str, port: i
     )
 
 async def push_statistics_script(ip_addr: str, source_path: str, dest_path: str, port: int = 5555) -> SimpleClientResponse[bool]:
+    """
+    Pushes the SocialEyes statistics script to the device at the specified IP address and port.
+
+    Returns
+    -------
+    SimpleClientResponse[bool]
+        A response object containing:
+        - timeout_occurred: True if the command timed out, False otherwise.
+        - error_messages: A list of error messages encountered during the push operation.
+        - result: True if the push was successful, False otherwise.
+    """
     response = await fetch_adb_command_output(f'-s {ip_addr}:{port} push {source_path} {dest_path}')
     return SimpleClientResponse(
         timeout_occurred=response.timeout_occurred,
@@ -79,6 +128,17 @@ async def push_statistics_script(ip_addr: str, source_path: str, dest_path: str,
     )
 
 async def connect_adb(ip_addr: str, port: int = 5555) -> SimpleClientResponse[bool]:
+    """
+    Connects to the specified IP address and port using ADB.
+    
+    Returns
+    -------
+    SimpleClientResponse[bool]
+        A response object containing:
+        - timeout_occurred: True if the command timed out, False otherwise.
+        - error_messages: A list of error messages encountered during the connection attempt.
+        - result: True if the connection was successful, False otherwise.
+    """
     response = await fetch_adb_command_output(f'connect {ip_addr}:{port}')
     timeout_occurred = response.timeout_occurred
     errors = response.error_messages.copy()

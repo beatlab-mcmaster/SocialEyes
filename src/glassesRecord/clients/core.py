@@ -11,18 +11,15 @@ class ClientResponse:
     timeout_occurred: bool
     error_messages: list[str]
 
-    @property
-    def success(self) -> bool:
-        """Returns True if the operation was successful (no timeout and no errors)."""
-        return not self.timeout_occurred and len(self.error_messages) == 0
-
 P = TypeVar('P')
 @dataclass
-class SimpleClientResponse(Generic[P], ClientResponse):
+class SimpleClientResponse(ClientResponse, Generic[P]):
+    """A simple client response that includes a result of type P or None."""
     result: P | None
 
 @dataclass
 class ProcessResponse(ClientResponse):
+    """Represents the result of executing a command in a subprocess, including the return code, stdout, and stderr."""
     return_code: int | None
     stdout: str | None
     stderr: str | None
@@ -30,6 +27,7 @@ class ProcessResponse(ClientResponse):
 async def fetch_command_output(cmd, timeout=TIMEOUT_SECONDS) -> ProcessResponse:
     """
     Executes `cmd`. If execution exceeds `timeout` (seconds), kill process.
+    If the process is killed due to timeout, the return code will be None, and stdout/stderr will be None.
 
     Returns
     -------
@@ -56,7 +54,6 @@ async def fetch_command_output(cmd, timeout=TIMEOUT_SECONDS) -> ProcessResponse:
             process.kill()
         except ProcessLookupError:
             pass
-        rc = process.returncode
         timeout_occurred = True
 
     return ProcessResponse(
@@ -72,6 +69,4 @@ def exists_as_path_or_command(user_input: str) -> bool:
     if os.path.exists(user_input):
         return True
     command_path = shutil.which(user_input)
-    if command_path:
-        return True
-    return False
+    return bool(command_path)

@@ -8,6 +8,17 @@ from multiprocessing.queues import Queue
 from .device import Device, DeviceState
 
 
+async def run_device_worker(
+    device: Device,
+    stop_event: multiprocessing.synchronize.Event,
+) -> None:
+    await device.start()
+    try:
+        while not stop_event.is_set():
+            await asyncio.sleep(1)
+    finally:
+        await device.stop()
+
 def device_worker_process(
         ip_addr: str, 
         port: int, 
@@ -32,15 +43,10 @@ def device_worker_process(
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    async def run():
-        await device.start()
-        while not stop_event.is_set():
-            await asyncio.sleep(1)
-        await device.stop()
-
     try:
-        loop.run_until_complete(run())
+        loop.run_until_complete(run_device_worker(device, stop_event))
     finally:
         pipe.close()
         loop.close()
+
     

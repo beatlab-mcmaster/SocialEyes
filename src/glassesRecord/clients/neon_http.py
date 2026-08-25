@@ -25,6 +25,18 @@ class NeonHardwareIdsResponse(ClientResponse):
     module_serial: str | None
 
 async def get_neon_hardware_ids(ip_addr: str) -> NeonHardwareIdsResponse:
+    """
+    Get the hardware IDs of the Neon device.
+
+    Returns
+    -------
+    NeonHardwareIdsResponse
+        A NeonHardwareIdsResponse object containing the device and hardware IDs.
+        - device_name: The name of the device (e.g., "Neon Companion").
+        - device_id: The unique identifier of the device.
+        - frame_name: The name of the frame (if available).
+        - module_serial: The serial number of the module (if available).
+    """
     device_name = None
     device_id = None
     frame_name = None
@@ -58,14 +70,22 @@ async def get_neon_hardware_ids(ip_addr: str) -> NeonHardwareIdsResponse:
     )
 
 async def start_neon_recording(ip_addr: str) -> SimpleClientResponse[str | None]:
+    """
+    Start a recording on the Neon device.
+    
+    Returns
+    -------
+    SimpleClientResponse[str | None]
+        A SimpleClientResponse object containing the recording ID if successful, or None if not.
+    """
     recording_id = None
     response = await fetch_http_post_response(f'http://{ip_addr}:8080/api/recording:start', data_json={})
     errors = response.error_messages.copy()
     if response.status_code == 200 and response.response_text is not None:
         try:
             res_json = json.loads(response.response_text)
-            if 'message' in res_json and res_json['message'] == 'Success' and 'result' in res_json:
-                recording_id = str(res_json['result']['recording_id'])
+            if 'message' in res_json and res_json['message'] == 'Started recording' and 'result' in res_json:
+                recording_id = str(res_json['result']['id'])
         except json.JSONDecodeError as e:
             errors.append(f"JSON decode error: {e!s}")
     return SimpleClientResponse(
@@ -81,8 +101,9 @@ async def stop_and_save_neon_recording(ip_addr: str) -> SimpleClientResponse[str
     if response.status_code == 200 and response.response_text is not None:
         try:
             res_json = json.loads(response.response_text)
-            if 'message' in res_json and res_json['message'] == 'Success' and 'result' in res_json:
-                recording_id = str(res_json['result']['recording_id'])
+            if 'message' in res_json and res_json['message'] == 'Stopped recording' and 'result' in res_json and res_json['result'] is not None and 'id' in res_json['result']:
+                # At least in v2.9.31: result = null, so we cannot get the recording ID from the response.
+                recording_id = str(res_json['result']['id'])
         except json.JSONDecodeError as e:
             errors.append(f"JSON decode error: {e!s}")
     return SimpleClientResponse(
@@ -98,8 +119,8 @@ async def cancel_neon_recording(ip_addr: str) -> SimpleClientResponse[str | None
     if response.status_code == 200 and response.response_text is not None:
         try:
             res_json = json.loads(response.response_text)
-            if 'message' in res_json and res_json['message'] == 'Success' and 'result' in res_json:
-                recording_id = str(res_json['result']['recording_id'])
+            if 'message' in res_json and res_json['message'] == 'Success' and 'result' in res_json and res_json['result'] is not None and 'id' in res_json['result']:
+                recording_id = str(res_json['result']['id'])
         except json.JSONDecodeError as e:
             errors.append(f"JSON decode error: {e!s}")
     return SimpleClientResponse(

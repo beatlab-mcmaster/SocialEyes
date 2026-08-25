@@ -72,6 +72,14 @@ class DeviceManager:
         self._device_states = {}
 
     def register_device(self, ip_addr: str, port: int = 5555):
+        """
+        Register a new device and start its worker process.
+        If the device is already registered, this method does nothing.
+        """
+        if ip_addr in self._workers:
+            self._logger.warning(f"Device {ip_addr} is already registered.")
+            return
+        
         parent_conn, child_conn = multiprocessing.Pipe()
         stop_event = multiprocessing.Event()
 
@@ -87,6 +95,12 @@ class DeviceManager:
         )
 
     async def start_all(self):
+        """
+        Start the device state collection task if it's not already running.
+        """
+        if self._collect_states_task is not None and not self._collect_states_task.done():
+            self._logger.warning("Device state collection task is already running.")
+            return
         self._collect_states_stop_event.clear()
         self._collect_states_task = asyncio.create_task(self._collect_states())
 
@@ -95,9 +109,9 @@ class DeviceManager:
         if self._collect_states_task is not None:
             self._collect_states_task.cancel()
 
-        for _, worker in self._workers.items():
+        for worker in self._workers.values():
             worker.stop_event.set()
-        for _, worker in self._workers.items():
+        for worker in self._workers.values():
             self._stop_worker(worker, join_timeout)
 
     def get_device_state(self, ip_addr: str) -> DeviceState | None:
@@ -113,9 +127,9 @@ class DeviceManager:
     async def _collect_states(self):
         """Collect device states from worker processes."""
         while not self._collect_states_stop_event.is_set():
-            now = datetime.datetime.now()
+            now = asyncio.get_event_loop().time()
             self._poll_worker_pipes()
-            time_elapsed = (datetime.datetime.now() - now).total_seconds()
+            time_elapsed = asyncio.get_event_loop().time() - now
             timeout = max(0, self._target_cycle_period_s - time_elapsed)
             try:
                 await asyncio.wait_for(self._collect_states_stop_event.wait(), timeout=timeout)
@@ -124,9 +138,12 @@ class DeviceManager:
 
     def _poll_worker_pipes(self):
         for ip_addr, worker in self._workers.items():
-            if worker.pipe.poll():
-                state_update: DeviceState = worker.pipe.recv()
-                self._device_states[ip_addr] = state_update
+            try:
+                if worker.pipe.poll():
+                    state_update: DeviceState = worker.pipe.recv()
+                    self._device_states[ip_addr] = state_update
+            except Exception as e:
+                self._logger.error(f"Error polling worker pipe for {ip_addr}: {e}")
 
     def _stop_worker(self, worker: DeviceWorkerHandle, join_timeout: float):
         ip_addr = worker.device_config.ip_addr

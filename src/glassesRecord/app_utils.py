@@ -3,10 +3,9 @@ import os
 from datetime import datetime
 from enum import Enum
 
-from src.glassesRecord.clients.adb import get_default_adb_path
-from src.glassesRecord.clients.core import exists_as_path_or_command
-
 from .app_config import TableAppConfig
+from .clients.adb import get_default_adb_path
+from .clients.core import exists_as_path_or_command
 from .session_controller import SessionController, SessionControllerConfig
 
 

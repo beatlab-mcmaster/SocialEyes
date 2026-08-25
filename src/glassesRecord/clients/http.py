@@ -18,6 +18,9 @@ async def fetch_http_get_response(url, timeout=TIMEOUT_SECONDS) -> HttpResponse:
     Returns
     -------
     HttpResponse
+        - timeout_occurred: True if the request timed out, False otherwise.
+        - status_code: The HTTP status code of the response. None if the request failed or timed out.
+        - response_text: The text content of the response. None if the request failed or timed out.
     """
     status_code = None
     res = None
@@ -48,6 +51,9 @@ async def fetch_http_post_response(url, data_json=None, timeout=TIMEOUT_SECONDS)
     Returns
     -------
     HttpResponse
+        - timeout_occurred: True if the request timed out, False otherwise.
+        - status_code: The HTTP status code of the response. None if the request failed or timed out.
+        - response_text: The text content of the response. None if the request failed or timed out.
     """
     status_code = None
     res = None

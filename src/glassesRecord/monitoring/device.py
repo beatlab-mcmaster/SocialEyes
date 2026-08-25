@@ -10,11 +10,15 @@ import logging
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 
+from glassesRecord.monitoring.recording_state import (
+    RecordingInfo,
+    determine_recording_state,
+)
+
 from .device_clients import DeviceClients
-from .scripts.statistics_schema import DeviceStatistics, Mp4File, NeonRecording
+from .scripts.statistics_schema import DeviceStatistics
 
 REPO_STATISTICS_SCRIPT_PATH_STR = str((Path(__file__).parent / 'scripts' / 'statistics.sh').resolve())
 PHONE_STATISTICS_SCRIPT_PATH_STR = '/storage/self/primary/Documents/SocialEyes/statistics.sh'
@@ -26,27 +30,13 @@ class NeonHardwareIDs:
     frame_name: str | None = None
     module_serial: str | None = None
 
-class RecordingState(Enum):
-    UNKNOWN = 0,
-    IDLE = 1,
-    RECORDING_IN_PROGRESS = 2,
-    RECORDING_HAS_NO_MP4 = 3,
-    RECORDING_UNSAVED_OR_FAILED = 4,
-
-@dataclass
-class RecordingInfo:
-    workspace_id: str
-    recording_id: str
-    state: RecordingState
-    started_at: datetime.datetime | None = None
-    duration: float | None = None
-    details: dict[str, Mp4File] | None = None
-    red_light_indicator_detected: bool | None = None
-
 @dataclass
 class DeviceState:
     ip_addr: str
-    now: datetime.datetime = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
+    now: datetime.datetime = field(
+        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc),
+        compare=False
+    )
     ping: int | None = None
     adb_connection_is_established: bool | None = None
     neon_api_is_available: bool | None = None
@@ -91,10 +81,6 @@ class Device:
         return self._statistics_history[-1] if self._statistics_history else None
 
     @property
-    def _previous_statistics(self) -> DeviceStatistics | None:
-        return self._statistics_history[-2] if len(self._statistics_history) > 1 else None
-
-    @property
     def active_recordings(self) -> dict[str, RecordingInfo] | None:
         """Return the latest active recordings (i.e., recording directories that contain a temp_*.json) or None if no statistics have been collected yet."""
         return self._active_recordings
@@ -103,17 +89,18 @@ class Device:
                  ip_addr: str, 
                  port: int = 5555,
                  on_change: Callable[[DeviceState | None], None] | None = None,
-                 clients: DeviceClients = DeviceClients()
+                 clients: DeviceClients | None = None,
+                 history_max_length: int = 3
     ):
         self._ip_addr = ip_addr
         self._port = port
         self._on_change = on_change
-        self._clients = clients
+        self._clients = clients if clients is not None else DeviceClients()
 
         self._background_task = None
         self._statistics_script_pushed = False
-        self._statistics_history = deque(maxlen=3)
-        self._state_history = deque(maxlen=3)
+        self._statistics_history = deque(maxlen=history_max_length)
+        self._state_history = deque(maxlen=history_max_length)
         self._active_recordings = None
 
         self._logger = logging.getLogger(f"Device-{self._ip_addr}:{self._port}")
@@ -132,47 +119,50 @@ class Device:
     async def _background_worker_run(self):
         while True:
             try:
-                current_cycle_start = datetime.datetime.now()
+                current_cycle_start = asyncio.get_running_loop().time()
 
                 current_state = await self._poll_once()
-                self._state_history.append(current_state)
-
-                # Notify observer if there are changes in the device statistics
-                await self._notify_observer()
+                self._record_state(current_state)
 
                 # Sleep to maintain the target cycle period
-                elapsed_seconds = (datetime.datetime.now() - current_cycle_start).total_seconds()
+                elapsed_seconds = asyncio.get_running_loop().time() - current_cycle_start
                 if elapsed_seconds < self._target_cycle_period_s:
                     await asyncio.sleep(self._target_cycle_period_s - elapsed_seconds)
             except asyncio.CancelledError:
                 self._logger.info(f"Background worker cancelled for {self._ip_addr}")
-                await asyncio.sleep(0.1)
-                break
+                raise
             except Exception as e:
                 self._logger.error(f"Unexpected error in background worker: {e}", exc_info=e)
                 await asyncio.sleep(5) # Wait 5 seconds before retrying the next cycle
 
     async def _poll_once(self) -> DeviceState:
+        await self._update_connectivity()
+        await self._ensure_statistics_script()
+        await self._update_statistics()
+        return self._build_state()
+
+    async def _update_connectivity(self) -> None:
         self._ping = await self._determine_ping()
         self._adb_connection_is_established = await self._determine_adb_connection_is_established()
-    
         self._neon_api_is_available = await self._determine_neon_api_is_available()
-        self._neon_hardware_ids = await self._determine_neon_hardware_ids()
 
+    async def _ensure_statistics_script(self) -> None:
         if not self._statistics_script_pushed and self._ping is not None and self._adb_connection_is_established: 
             if await self._push_statistics_script():
                 self._statistics_script_pushed = True
             else:
                 self._logger.error(f"Failed to push statistics.sh script to device {self._ip_addr}.")
 
+    async def _update_statistics(self) -> None:
+        self._neon_hardware_ids = await self._determine_neon_hardware_ids()
         if self._statistics_script_pushed:
             statistics = await self._fetch_statistics()
             if statistics is not None:
                 self._statistics_history.append(statistics)
             self._active_recordings = await self._determine_active_recordings()
 
-        # Update latest state
-        current_state = DeviceState(
+    def _build_state(self) -> DeviceState:
+        return DeviceState(
             ip_addr=self._ip_addr,
             ping=self._ping,
             adb_connection_is_established=self._adb_connection_is_established,
@@ -182,14 +172,15 @@ class Device:
             active_recordings=self._active_recordings,
         )
 
-        return current_state
+    def _record_state(self, state: DeviceState) -> None:
+        previous_state = self.latest_state
+        self._state_history.append(state)
 
-    async def _check_statistics_script_exists(self) -> bool:
-        response = await self._clients.check_statistics_script_exists(self._ip_addr, script_path=PHONE_STATISTICS_SCRIPT_PATH_STR, port=self._port)
-        return response.result if response.result is not None else False
+        if self._on_change is not None and state != previous_state:
+            self._on_change(state)
 
     async def _push_statistics_script(self) -> bool:
-        response = await self._clients.push_statistics_script(self._ip_addr, source_path=REPO_STATISTICS_SCRIPT_PATH_STR, dest_path=PHONE_STATISTICS_SCRIPT_PATH_STR, port=self._port)
+        response = await self._clients.push_statistics_script(self._ip_addr, REPO_STATISTICS_SCRIPT_PATH_STR, PHONE_STATISTICS_SCRIPT_PATH_STR, self._port)
         return response.result if response.result is not None else False
 
     async def _fetch_statistics(self) -> DeviceStatistics | None:
@@ -221,31 +212,6 @@ class Device:
         response = await self._clients.check_red_light_flashing_indicators(self._ip_addr, self._port, workspace_id, recording_id)
         return response.result
 
-    def _determine_recording_state(self, neon_recording: NeonRecording, old_recording_info: RecordingInfo | None) -> RecordingState:
-        result = None
-        if old_recording_info is None:
-            # If we haven't seen this recording before, we don't know if it's still recording or not
-            result = RecordingState.UNKNOWN
-        else:
-            if len(neon_recording.mp4_files) == 0:
-                # If there are no mp4 files, then the recording has failed to save any mp4 files
-                result = RecordingState.RECORDING_HAS_NO_MP4
-            else:
-                any_size_increased = self._check_if_mp4_sizes_increased(neon_recording, old_recording_info)
-                result = RecordingState.RECORDING_IN_PROGRESS if any_size_increased else RecordingState.RECORDING_UNSAVED_OR_FAILED
-        return result
-
-    def _check_if_mp4_sizes_increased(self, neon_recording, old_recording_info):
-        # Check if any of the mp4 files have increased in size since the last time we checked
-        any_size_increased = False
-        for mp4 in neon_recording.mp4_files:
-            if old_recording_info.details is not None:
-                old_mp4_file_obj = old_recording_info.details.get(mp4.file_name)
-                if old_mp4_file_obj is not None and mp4.file_size_bytes > old_mp4_file_obj.file_size_bytes:
-                    any_size_increased = True
-                    break
-        return any_size_increased
-
     async def _determine_active_recordings(self) -> dict[str, RecordingInfo] | None:
         result = None
         if self._latest_statistics is not None and self._latest_statistics.neon.recordings is not None:
@@ -253,13 +219,20 @@ class Device:
             for rec in self._latest_statistics.neon.recordings:
                 rec_id = rec.recording_id
 
-                # duration
-                earliest_mp4_creation_time = min([mp4.creation_time for mp4 in rec.mp4_files])
-                duration = round((max([mp4.modification_time for mp4 in rec.mp4_files]) - earliest_mp4_creation_time).total_seconds())
+                # started_at & duration
+                if not rec.mp4_files:
+                    started_at = None
+                    duration = None
+                else:
+                    started_at = min([mp4.creation_time for mp4 in rec.mp4_files])
+                    duration = round(
+                        (max([mp4.modification_time for mp4 in rec.mp4_files]) - started_at)
+                        .total_seconds()
+                    )
 
                 # recording state
                 old_recording_info = self._active_recordings[rec_id] if self._active_recordings is not None and rec_id in self._active_recordings else None
-                state = self._determine_recording_state(neon_recording=rec, old_recording_info=old_recording_info)
+                state = determine_recording_state(neon_recording=rec, old_recording_info=old_recording_info)
 
                 # red light indicator detection
                 if old_recording_info is not None and old_recording_info.red_light_indicator_detected is not None:
@@ -270,15 +243,10 @@ class Device:
                 result[rec_id] = RecordingInfo(
                     workspace_id=rec.workspace_id,
                     recording_id=rec_id,
-                    started_at=earliest_mp4_creation_time,
+                    started_at=started_at,
                     duration=duration,
                     state=state,
                     details={mp4.file_name: mp4 for mp4 in rec.mp4_files} if rec.mp4_files else None,
                     red_light_indicator_detected=red_light_indicator_detected
                 )
         return result
-
-    async def _notify_observer(self):
-        if self._on_change is not None:
-            if self.latest_state != self.previous_state:
-                self._on_change(self.latest_state)
