@@ -3,10 +3,18 @@ import logging
 import logging.handlers
 from multiprocessing.connection import Connection
 from multiprocessing.queues import Queue
+import multiprocessing.synchronize
 from typing import Optional
+
 from .device import Device, DeviceState
 
-def device_worker_process(ip_addr: str, port: int, pipe: Connection, log_queue: Queue):
+def device_worker_process(
+        ip_addr: str, 
+        port: int, 
+        pipe: Connection, 
+        log_queue: Queue,
+        stop_event: multiprocessing.synchronize.Event
+    ):
     """
     This is the worker process that manages a single device.
     The process communicates with the main process via the `pipe` and sends log messages via the `log_queue`.
@@ -26,8 +34,13 @@ def device_worker_process(ip_addr: str, port: int, pipe: Connection, log_queue: 
 
     async def run():
         await device.start()
-        while True:
+        while not stop_event.is_set():
             await asyncio.sleep(1)
+        await device.stop()
 
-    loop.run_until_complete(run())
+    try:
+        loop.run_until_complete(run())
+    finally:
+        pipe.close()
+        loop.close()
     

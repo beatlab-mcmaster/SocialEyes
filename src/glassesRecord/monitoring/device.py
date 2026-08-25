@@ -4,10 +4,6 @@ device.py
 Author: Alexander Nguyen, Shreshth Saxena
 Purpose: Implements the device class with Android Debug Bridge (ADB) utility functions to monitor the device.
 """
-import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
 from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum
@@ -18,10 +14,8 @@ from typing import Dict, Optional
 from collections import deque
 from collections.abc import Callable
 
-from .scripts.statistics_schema import DeviceStatistics, Mp4File
-from ..clients.adb import check_adb_connection, check_statistics_script_exists, push_statistics_script, fetch_socialeyes_statistics
-from ..clients.neon import is_neon_api_accessible, get_neon_hardware_ids, check_red_light_flashing_indicators
-from ..clients.ping import ping_device
+from .device_clients import DeviceClients
+from .scripts.statistics_schema import DeviceStatistics, Mp4File, NeonRecording
 
 REPO_STATISTICS_SCRIPT_PATH_STR = str((Path(__file__).parent / 'scripts' / 'statistics.sh').resolve())
 PHONE_STATISTICS_SCRIPT_PATH_STR = '/storage/self/primary/Documents/SocialEyes/statistics.sh'
@@ -69,11 +63,11 @@ class Device:
     _target_cycle_period_s: float = 2
 
     # Internal state
-    _background_task: Optional[asyncio.Task] = None
-    _statistics_script_pushed: bool = False
-    _statistics_history: deque[DeviceStatistics] = deque(maxlen=3)
-    _state_history: deque[DeviceState] = deque(maxlen=3)
-    _active_recordings: Optional[Dict[str, RecordingInfo]] = None
+    _background_task: Optional[asyncio.Task]
+    _statistics_script_pushed: bool
+    _statistics_history: deque[DeviceStatistics]
+    _state_history: deque[DeviceState]
+    _active_recordings: Optional[Dict[str, RecordingInfo]]
 
     @property
     def target_cycle_period_s(self) -> float:
@@ -109,11 +103,19 @@ class Device:
     def __init__(self, 
                  ip_addr: str, 
                  port: int = 5555,
-                 on_change: Optional[Callable[[Optional[DeviceState]], None]] = None
+                 on_change: Optional[Callable[[Optional[DeviceState]], None]] = None,
+                 clients: DeviceClients = DeviceClients()
     ):
         self._ip_addr = ip_addr
         self._port = port
         self._on_change = on_change
+        self._clients = clients
+
+        self._background_task = None
+        self._statistics_script_pushed = False
+        self._statistics_history = deque(maxlen=3)
+        self._state_history = deque(maxlen=3)
+        self._active_recordings = None
 
         self._logger = logging.getLogger(f"Device-{self._ip_addr}:{self._port}")
 
@@ -133,34 +135,7 @@ class Device:
             try:
                 current_cycle_start = datetime.datetime.now()
 
-                self._ping = await self._determine_ping()
-                self._adb_connection_is_established = await self._determine_adb_connection_is_established()
-            
-                self._neon_api_is_available = await self._determine_neon_api_is_available()
-                self._neon_hardware_ids = await self._determine_neon_hardware_ids()
-
-                if not self._statistics_script_pushed and self._ping is not None and self._adb_connection_is_established: 
-                    if await self._push_statistics_script():
-                        self._statistics_script_pushed = True
-                    else:
-                        self._logger.error(f"Failed to push statistics.sh script to device {self._ip_addr}.")
-
-                if self._statistics_script_pushed:
-                    statistics = await self._fetch_statistics()
-                    if statistics is not None:
-                        self._statistics_history.append(statistics)
-                    self._active_recordings = await self._determine_active_recordings()
-
-                # Update latest state
-                current_state = DeviceState(
-                    ip_addr=self._ip_addr,
-                    ping=self._ping,
-                    adb_connection_is_established=self._adb_connection_is_established,
-                    latest_statistics=self._latest_statistics,
-                    neon_api_is_available=self._neon_api_is_available,
-                    neon_hardware_ids=self._neon_hardware_ids,
-                    active_recordings=self._active_recordings,
-                )
+                current_state = await self._poll_once()
                 self._state_history.append(current_state)
 
                 # Notify observer if there are changes in the device statistics
@@ -178,32 +153,64 @@ class Device:
                 self._logger.error(f"Unexpected error in background worker: {e}", exc_info=e)
                 await asyncio.sleep(5) # Wait 5 seconds before retrying the next cycle
 
+    async def _poll_once(self) -> DeviceState:
+        self._ping = await self._determine_ping()
+        self._adb_connection_is_established = await self._determine_adb_connection_is_established()
+    
+        self._neon_api_is_available = await self._determine_neon_api_is_available()
+        self._neon_hardware_ids = await self._determine_neon_hardware_ids()
+
+        if not self._statistics_script_pushed and self._ping is not None and self._adb_connection_is_established: 
+            if await self._push_statistics_script():
+                self._statistics_script_pushed = True
+            else:
+                self._logger.error(f"Failed to push statistics.sh script to device {self._ip_addr}.")
+
+        if self._statistics_script_pushed:
+            statistics = await self._fetch_statistics()
+            if statistics is not None:
+                self._statistics_history.append(statistics)
+            self._active_recordings = await self._determine_active_recordings()
+
+        # Update latest state
+        current_state = DeviceState(
+            ip_addr=self._ip_addr,
+            ping=self._ping,
+            adb_connection_is_established=self._adb_connection_is_established,
+            latest_statistics=self._latest_statistics,
+            neon_api_is_available=self._neon_api_is_available,
+            neon_hardware_ids=self._neon_hardware_ids,
+            active_recordings=self._active_recordings,
+        )
+
+        return current_state
+
     async def _check_statistics_script_exists(self) -> bool:
-        response = await check_statistics_script_exists(self._ip_addr, script_path=PHONE_STATISTICS_SCRIPT_PATH_STR, port=self._port)
+        response = await self._clients.check_statistics_script_exists(self._ip_addr, script_path=PHONE_STATISTICS_SCRIPT_PATH_STR, port=self._port)
         return response.result if response.result is not None else False
 
     async def _push_statistics_script(self) -> bool:
-        response = await push_statistics_script(self._ip_addr, source_path=REPO_STATISTICS_SCRIPT_PATH_STR, dest_path=PHONE_STATISTICS_SCRIPT_PATH_STR, port=self._port)
+        response = await self._clients.push_statistics_script(self._ip_addr, source_path=REPO_STATISTICS_SCRIPT_PATH_STR, dest_path=PHONE_STATISTICS_SCRIPT_PATH_STR, port=self._port)
         return response.result if response.result is not None else False
 
     async def _fetch_statistics(self) -> Optional[DeviceStatistics]:
-        response = await fetch_socialeyes_statistics(self._ip_addr, self._port)
+        response = await self._clients.fetch_socialeyes_statistics(self._ip_addr, self._port)
         return response.result
 
     async def _determine_ping(self) -> Optional[int]:
-        ping_response = await ping_device(self._ip_addr)
+        ping_response = await self._clients.ping_device(self._ip_addr)
         return ping_response.result
 
     async def _determine_adb_connection_is_established(self) -> Optional[bool]:
-        response = await check_adb_connection(self._ip_addr, self._port)
+        response = await self._clients.check_adb_connection(self._ip_addr, self._port)
         return response.result
 
     async def _determine_neon_api_is_available(self) -> Optional[bool]:
-        response = await is_neon_api_accessible(self._ip_addr)
+        response = await self._clients.is_neon_api_accessible(self._ip_addr)
         return response.result
 
     async def _determine_neon_hardware_ids(self) -> Optional[NeonHardwareIDs]:
-        response = await get_neon_hardware_ids(self._ip_addr)
+        response = await self._clients.get_neon_hardware_ids(self._ip_addr)
         return NeonHardwareIDs(
             device_name=response.device_name,
             device_id=response.device_id,
@@ -212,8 +219,33 @@ class Device:
         )
 
     async def _determine_red_light_indicators_detected(self, workspace_id: str, recording_id: str) -> Optional[bool]:
-        response = await check_red_light_flashing_indicators(self._ip_addr, self._port, workspace_id, recording_id)
+        response = await self._clients.check_red_light_flashing_indicators(self._ip_addr, self._port, workspace_id, recording_id)
         return response.result
+
+    def _determine_recording_state(self, neon_recording: NeonRecording, old_recording_info: Optional[RecordingInfo]) -> RecordingState:
+        result = None
+        if old_recording_info is None:
+            # If we haven't seen this recording before, we don't know if it's still recording or not
+            result = RecordingState.UNKNOWN
+        else:
+            if len(neon_recording.mp4_files) == 0:
+                # If there are no mp4 files, then the recording has failed to save any mp4 files
+                result = RecordingState.RECORDING_HAS_NO_MP4
+            else:
+                any_size_increased = self._check_if_mp4_sizes_increased(neon_recording, old_recording_info)
+                result = RecordingState.RECORDING_IN_PROGRESS if any_size_increased else RecordingState.RECORDING_UNSAVED_OR_FAILED
+        return result
+
+    def _check_if_mp4_sizes_increased(self, neon_recording, old_recording_info):
+        # Check if any of the mp4 files have increased in size since the last time we checked
+        any_size_increased = False
+        for mp4 in neon_recording.mp4_files:
+            if old_recording_info.details is not None:
+                old_mp4_file_obj = old_recording_info.details.get(mp4.file_name)
+                if old_mp4_file_obj is not None and mp4.file_size_bytes > old_mp4_file_obj.file_size_bytes:
+                    any_size_increased = True
+                    break
+        return any_size_increased
 
     async def _determine_active_recordings(self) -> Optional[Dict[str, RecordingInfo]]:
         result = None
@@ -228,25 +260,7 @@ class Device:
 
                 # recording state
                 old_recording_info = self._active_recordings[rec_id] if self._active_recordings is not None and rec_id in self._active_recordings else None
-                state = None
-                if old_recording_info is None:
-                    # = first time we see this recording, we don't know if it's still recording or not
-                    state = RecordingState.UNKNOWN
-                else:
-                    if len(rec.mp4_files) == 0:
-                        state = RecordingState.RECORDING_HAS_NO_MP4
-                    else:
-                        any_size_increased = False
-                        for mp4 in rec.mp4_files:
-                            if old_recording_info.details is not None:
-                                old_mp4_file_obj = old_recording_info.details.get(mp4.file_name)
-                                if old_mp4_file_obj is not None and mp4.file_size_bytes > old_mp4_file_obj.file_size_bytes:
-                                    any_size_increased = True
-                                    break
-                        if any_size_increased:
-                            state = RecordingState.RECORDING_IN_PROGRESS
-                        else:
-                            state = RecordingState.RECORDING_UNSAVED_OR_FAILED
+                state = self._determine_recording_state(neon_recording=rec, old_recording_info=old_recording_info)
 
                 # red light indicator detection
                 if old_recording_info is not None and old_recording_info.red_light_indicator_detected is not None:

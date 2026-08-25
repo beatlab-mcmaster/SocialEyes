@@ -74,22 +74,17 @@ This implementation relies on the following hardware for data collection:
 - Centralview Camera: Any standard USB or network webcam. Compatibility for [ArduCam's Camera Evaluation Kit](https://www.arducam.com/product/arducam-2-2mp-mira220-rgb-ir-global-shutter-usb3-0-camera-evaluation-kit/) is also provided but currently lacks Image Signal Processing (ISP) support from the manufacturer.
 
 ## Software Prerequisites 
+Below are some prerequisites you may need when running the software:
 
-You can execute the code either with a software container (using Docker, Podman, etc.) or by building it from source. Please note that the source has only been tested on Ubuntu OS. Below are some prerequisites you may need when running the software:
-
-### 1. Using a Container (Recommended for Windows and macOS)
-- Install [Docker](https://docs.docker.com/get-started/get-docker/) (or your preferred containerization tool).
-
-### 2. Using Source
-- Install the latest Python distribution: [Download Python](https://www.python.org/downloads/)
+- Install the latest Python 3 distribution: [Download Python](https://www.python.org/downloads/)
 
 To ensure dependencies are properly managed, we recommend creating a separate Python environment using either **conda** or **virtualenv**.
 
 > **With Conda (Recommended)**
 
-- Install Anaconda or Miniconda from [here](https://docs.anaconda.com/getting-started/).
+- Install Miniconda or Anaconda from [here](https://docs.anaconda.com/getting-started/).
 - Create a new environment:  
-  `conda create -n SocialEyes python=3.10`
+  `conda create -n SocialEyes python=3.14`
 - Activate the environment:  
   `conda activate SocialEyes`
 
@@ -116,10 +111,9 @@ python3 quickstart.py
 ```
 
 The quickstart script will:
-- Validate your environment (Python 3.10+, Docker, Git submodules)
-- Download ADB if needed (Windows/macOS/Linux)
-- Build the Docker image
-- Provide a menu to launch the demo or ADB helper
+- Validate your environment (Python 3, Git submodules, ADB)
+- Download [ADB](https://developer.android.com/tools/adb) if not yet present
+- Provide a menu to launch the ADB helper or demo
 
 ## Interfaces 
 

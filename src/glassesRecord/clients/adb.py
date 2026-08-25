@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from .core import exists_as_path_or_command, SimpleClientResponse, fetch_command_output
-from ..neon.scripts.statistics_schema import DeviceStatistics
+from ..monitoring.scripts.statistics_schema import DeviceStatistics
 import json
 
 ADB_PATH = os.environ.get('ADB_PATH', 'adb')

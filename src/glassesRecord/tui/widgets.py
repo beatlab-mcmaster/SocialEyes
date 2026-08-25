@@ -10,17 +10,16 @@ Purpose: Utility functions for the main interface created with Textual python li
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, Iterable, Iterator
+from typing import ClassVar, Iterable, Iterator
 from textual.app import App
 
 from textual.binding import Binding
 from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 from textual.widgets.data_table import CellDoesNotExist, RowKey
-from textual.app import App, ComposeResult
+from textual.app import App
 from textual.binding import Binding
-from textual.widgets import DataTable, Footer#, Checkbox
-from textual.containers import HorizontalScroll
+from textual.widgets import DataTable
 
 
 @dataclass
@@ -228,8 +227,3 @@ class SelectableRowsDataTable(DataTable):
         for row in self.selectable_rows:
             if row.selected:
                 yield row
-
-
-if __name__ == "__main__":
-    app = TableApp()
-    app.run()

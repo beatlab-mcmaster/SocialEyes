@@ -1,11 +1,9 @@
+questionary
 textual
 textual-dev
+aiohttp
 numpy
 requests
 pupil_labs_realtime_api
-pytest
-pytest-asyncio
-aiohttp
 pytz
 pydantic
-questionary

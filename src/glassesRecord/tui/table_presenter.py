@@ -1,0 +1,60 @@
+from typing import Callable, Dict, Any
+from datetime import timezone, datetime
+
+from ..neon.device import DeviceState
+from .device_state import DeviceStateSnapshot, DeviceStateField
+from .formatting.rich_text import as_colored_text
+from .formatting.text import time_ago
+
+_FORMATTERS: Dict[DeviceStateField, Callable[[Any], Any]] = {
+    DeviceStateField.PING: lambda v: as_colored_text(v, thresh_low=200, thresh_high=500, reverse=True),
+    DeviceStateField.ADB: as_colored_text,
+    DeviceStateField.APP_ACTIVE: as_colored_text,
+    DeviceStateField.APP_API_STATUS: as_colored_text,
+    DeviceStateField.DEVICE_NAME: lambda v: v,  # plain text, no formatting
+    DeviceStateField.USB: as_colored_text,
+    DeviceStateField.FRAME_NAME: as_colored_text,
+    DeviceStateField.PL_REC: as_colored_text,
+    DeviceStateField.RED_LIGHT_INDICATORS: lambda v: as_colored_text(v, reverse=True),
+    DeviceStateField.BATTERY: lambda v: as_colored_text(v, thresh_low=25, thresh_high=50),
+    DeviceStateField.STORAGE: lambda v: as_colored_text(v, thresh_low=25, thresh_high=50),
+}
+
+class DeviceTablePresenter:
+
+    _current_snapshots: Dict[str, DeviceStateSnapshot]
+
+    def __init__(self):
+        self._current_snapshots: Dict[str, DeviceStateSnapshot] = {}
+
+    def diff_updates(self, states: Dict[str, DeviceState]) -> list[tuple[str, DeviceStateField, Any]]:
+        """
+        Compares the current `DeviceState`s with the previously rendered states and identifies any changes.
+        
+        Returns
+        -------
+        list[tuple[str, DeviceStateField, Any]]
+            A list of tuples containing the IP address, the field that changed, and the new value, formatted for display.
+        """
+        updates: list[tuple[str, DeviceStateField, Any]] = []
+
+        now = datetime.now(timezone.utc)
+        for ip_addr, state in states.items():
+            old_snapshot = self._current_snapshots.get(ip_addr)
+            new_snapshot = DeviceStateSnapshot(state)
+
+            # "Last updated" always refreshes, even if no tracked field changed
+            last_updated_val = as_colored_text(time_ago(now, new_snapshot.get(DeviceStateField.LAST_UPDATED)))
+            updates.append((ip_addr, DeviceStateField.LAST_UPDATED, last_updated_val))
+
+            # Other fields only update if they have changed since the last snapshot
+            changed_fields = new_snapshot.get_changed_fields(old_snapshot)
+            for field, raw_value in changed_fields.items():
+                formatter = _FORMATTERS.get(field)
+                if formatter is not None:
+                    updates.append((ip_addr, field, formatter(raw_value)))
+
+            # Update the rendered state for the next comparison
+            self._current_snapshots[ip_addr] = new_snapshot
+
+        return updates
