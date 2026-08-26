@@ -53,6 +53,8 @@ def device_worker_process(
 
     try:
         loop.run_until_complete(run_device_worker(device, stop_event, pipe))
+    except asyncio.CancelledError:
+        pass
     finally:
         pipe.close()
         loop.close()

@@ -103,8 +103,8 @@ class SessionController:
                 self._device_manager.set_monitoring_interval(dev, monitoring_interval)
         await self._device_manager.start_all()
 
-    def stop_device_monitoring(self):
-        self._device_manager.stop_all()
+    async def stop_device_monitoring(self):
+        await self._device_manager.stop_all()
     
     def get_all_device_states(self) -> dict[str, DeviceState]:
         return self._device_manager.get_all_device_states()

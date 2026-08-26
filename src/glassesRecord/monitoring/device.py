@@ -54,6 +54,7 @@ class Device:
     # Internal state
     _background_task: asyncio.Task | None
     _background_task_interrupt_event: asyncio.Event
+    _background_task_cancel_event: asyncio.Event
     _statistics_script_pushed: bool
     _statistics_history: deque[DeviceStatistics]
     _state_history: deque[DeviceState]
@@ -101,6 +102,7 @@ class Device:
 
         self._background_task = None
         self._background_task_interrupt_event = asyncio.Event()
+        self._background_task_cancel_event = asyncio.Event()
         self._statistics_script_pushed = False
         self._statistics_history = deque(maxlen=history_max_length)
         self._state_history = deque(maxlen=history_max_length)
@@ -114,12 +116,9 @@ class Device:
 
     async def stop(self):
         if self._background_task:
+            self._background_task_cancel_event.set()
             self._background_task_interrupt_event.set()
-            self._background_task.cancel()
-            try:
-                await self._background_task
-            except asyncio.CancelledError:
-                pass
+            # await self._background_task
 
     # -------------------------------------------------------
     # Private helper methods
@@ -127,7 +126,7 @@ class Device:
 
     async def _background_worker_run(self):
         assert self._background_task is not None, "Background task should be initialized before running."
-        while not self._background_task.cancelled():
+        while not self._background_task_cancel_event.is_set():
             try:
                 current_cycle_start = asyncio.get_running_loop().time()
 
@@ -141,9 +140,8 @@ class Device:
                     await asyncio.wait_for(self._background_task_interrupt_event.wait(), timeout=timeout)
                 except asyncio.TimeoutError:
                     pass
-                finally:
-                    if self._background_task_interrupt_event.is_set():
-                        self._background_task_interrupt_event.clear()
+                if self._background_task_interrupt_event.is_set():
+                    self._background_task_interrupt_event.clear()
             except asyncio.CancelledError:
                 self._logger.info(f"Background worker cancelled for {self._ip_addr}")
                 raise

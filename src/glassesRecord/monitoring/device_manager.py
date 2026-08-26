@@ -84,7 +84,7 @@ class DeviceManager:
 
         p = self._process_factory(ip_addr, port, child_conn, self._logger_queue, stop_event)
         p.start()
-        self._logger.info(f"Started device worker process for {ip_addr}")
+        child_conn.close()  # Close the child end in the parent process
 
         self._workers[ip_addr] = DeviceWorkerHandle(
             device_config=DeviceConfig(ip_addr, port),
@@ -103,15 +103,14 @@ class DeviceManager:
         self._collect_states_stop_event.clear()
         self._collect_states_task = asyncio.create_task(self._collect_states())
 
-    def stop_all(self, join_timeout: float = 5.0):
+    async def stop_all(self, join_timeout: float = 2):
         self._collect_states_stop_event.set()
         if self._collect_states_task is not None:
             self._collect_states_task.cancel()
 
         for worker in self._workers.values():
-            worker.stop_event.set()
-        for worker in self._workers.values():
             self._stop_worker(worker, join_timeout)
+        await asyncio.sleep(0)
 
     def get_device_state(self, ip_addr: str) -> DeviceState | None:
         return self._device_states.get(ip_addr)
@@ -152,10 +151,5 @@ class DeviceManager:
                 self._logger.error(f"Error polling worker pipe for {ip_addr}: {e}")
 
     def _stop_worker(self, worker: DeviceWorkerHandle, join_timeout: float):
-        ip_addr = worker.device_config.ip_addr
+        worker.process.terminate()
         worker.process.join(timeout=join_timeout)
-        if worker.process.is_alive():
-            self._logger.warning(f"Device worker process for {ip_addr} did not stop in time, terminating.")
-            worker.process.terminate()
-            worker.process.join(timeout=join_timeout)
-        self._logger.info(f"Stopped device worker process for {ip_addr}")

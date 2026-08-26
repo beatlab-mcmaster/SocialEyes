@@ -138,9 +138,8 @@ class TableApp(App):
             f"   glassesRecord TUI started in {session_mode_str}; Session ID: {self._session_controller.session_id}"
         )
 
-    def on_unmount(self) -> None:
-        self._session_controller.stop_device_monitoring()
-        self.exit()
+    async def on_unmount(self) -> None:
+        await self._session_controller.stop_device_monitoring()
 
     # -------------------------------------------------------
     # Event handlers
