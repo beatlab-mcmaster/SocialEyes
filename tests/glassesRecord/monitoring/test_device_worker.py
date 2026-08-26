@@ -16,12 +16,14 @@ async def test_run_device_worker_starts_and_stops_device(monkeypatch):
     stop_event = Mock()
     stop_event.is_set.side_effect = [False, True]
 
+    pipe = Mock()
+
     monkeypatch.setattr(
         "glassesRecord.monitoring.device_worker.asyncio.sleep",
         AsyncMock(),
     )
 
-    await run_device_worker(device, stop_event)
+    await run_device_worker(device, stop_event, pipe)
 
     device.start.assert_awaited_once()
     device.stop.assert_awaited_once()

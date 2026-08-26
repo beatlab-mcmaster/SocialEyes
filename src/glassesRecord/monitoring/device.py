@@ -118,7 +118,11 @@ class Device:
         if self._background_task:
             self._background_task_cancel_event.set()
             self._background_task_interrupt_event.set()
-            # await self._background_task
+            self._background_task.cancel()
+            try:
+                await self._background_task
+            except asyncio.CancelledError:
+                self._logger.info(f"Background task for {self._ip_addr} cancelled successfully.")
 
     # -------------------------------------------------------
     # Private helper methods

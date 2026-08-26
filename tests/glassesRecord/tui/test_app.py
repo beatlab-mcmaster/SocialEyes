@@ -8,11 +8,11 @@ from glassesRecord.app import TableApp, TableAppConfig
 
 @pytest.fixture
 def fake_session_controller():
-    session = Mock()
+    session = AsyncMock()
     session.session_id = "session-1"
     session.device_ip_addrs = ["192.168.2.101"]
     session.start_device_monitoring = AsyncMock()
-    session.stop_device_monitoring = Mock()
+    session.stop_device_monitoring = AsyncMock()
     session.log_event = Mock()
     session.get_all_device_states.return_value = {}
     return session

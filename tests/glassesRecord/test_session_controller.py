@@ -20,7 +20,7 @@ def fake_device_manager(monkeypatch):
     ]
     manager.register_device = Mock()
     manager.start_all = AsyncMock()
-    manager.stop_all = Mock()
+    manager.stop_all = AsyncMock()
     manager.get_all_device_states.return_value = {}
 
     monkeypatch.setattr(
@@ -38,6 +38,7 @@ def session_controller(tmp_path, fake_device_manager):
         is_single_session_mode=False,
         device_ips=["192.168.2.101", "192.168.2.102"],
         offset_logger_interval=10,
+        log_level="INFO",
     )
     return SessionController(config)
 
@@ -57,8 +58,8 @@ async def test_start_device_monitoring_delegates(session_controller, fake_device
 
     fake_device_manager.start_all.assert_awaited_once()
 
-def test_stop_device_monitoring_delegates(session_controller, fake_device_manager):
-    session_controller.stop_device_monitoring()
+async def test_stop_device_monitoring_delegates(session_controller, fake_device_manager):
+    await session_controller.stop_device_monitoring()
 
-    fake_device_manager.stop_all.assert_called_once()
+    fake_device_manager.stop_all.assert_awaited_once()
     

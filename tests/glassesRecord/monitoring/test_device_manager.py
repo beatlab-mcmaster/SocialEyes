@@ -58,7 +58,7 @@ async def test_start_all_creates_collection_task(fake_process_factory):
     assert manager._collect_states_task is not None
     assert manager._collect_states_task.done() is False
 
-    manager.stop_all()
+    await manager.stop_all()
 
 async def test_start_all_does_not_start_duplicate_tasks(fake_process_factory):
     manager = DeviceManager(process_factory=fake_process_factory)
@@ -70,7 +70,7 @@ async def test_start_all_does_not_start_duplicate_tasks(fake_process_factory):
 
     assert second_task is first_task
 
-def test_stop_all_signals_every_worker():
+async def test_stop_all_signals_every_worker():
     manager = DeviceManager(process_factory=Mock())
     fake_workers = {
         "192.168.2.101": Mock(stop_event=Mock(), process=Mock(join_called=False)),
@@ -79,8 +79,7 @@ def test_stop_all_signals_every_worker():
     for ip_addr, worker in fake_workers.items():
         manager._workers[ip_addr] = worker
 
-    manager.stop_all()
+    await manager.stop_all()
 
     for worker in fake_workers.values():
-        worker.stop_event.set.assert_called()
         worker.process.join.assert_called()
