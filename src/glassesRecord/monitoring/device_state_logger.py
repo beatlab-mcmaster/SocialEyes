@@ -55,8 +55,8 @@ class DeviceStateLogger:
         _recording_state_changed = recording_state_changed(old_state, state)
 
         result = never_logged or time_exceeded or _ping_changed or _adb_connection_changed or _recording_state_changed
-        if result:
-            self._logger.info(f"Snapshot due for device {ip_addr}: never_logged={never_logged}, time_exceeded={time_exceeded}, ping_changed={_ping_changed}, adb_connection_changed={_adb_connection_changed}, recording_state_changed={_recording_state_changed}")
+        if result and any([never_logged, _ping_changed, _adb_connection_changed, _recording_state_changed]): # Ignore time_exceeded for logging purposes, since it is expected to happen regularly
+            self._logger.info(f"Device state snapshot due for device {ip_addr}: never_logged={never_logged}, ping_changed={_ping_changed}, adb_connection_changed={_adb_connection_changed}, recording_state_changed={_recording_state_changed}")
         return result
 
 def adb_connection_changed(old_state: DeviceState | None, new_state: DeviceState) -> bool:

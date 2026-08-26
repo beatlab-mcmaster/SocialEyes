@@ -170,6 +170,7 @@ class Device:
         if not self._statistics_script_pushed and self._ping is not None and self._adb_connection_is_established: 
             if await self._push_statistics_script():
                 self._statistics_script_pushed = True
+                self._logger.info(f"Successfully pushed statistics.sh script to device {self._ip_addr}.")
             else:
                 self._logger.error(f"Failed to push statistics.sh script to device {self._ip_addr}.")
 
