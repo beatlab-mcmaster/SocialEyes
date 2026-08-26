@@ -1,10 +1,10 @@
 import logging
 from collections.abc import Callable, Coroutine
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.app import App, ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.widgets import Footer, Input, Label
 
 from .app_config import TableAppConfig
@@ -26,7 +26,7 @@ class TableApp(App):
 
     CSS_PATH = "TUI.tcss"
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding(key="q", action="quit", description="Quit the app"),
         Binding(key="r", action="recording_start",
             description="Start Recording"),
@@ -42,21 +42,21 @@ class TableApp(App):
         Binding(key="d", action="toggle_dark", description="Toggle dark mode"),
     ]
 
-    TABLE_COLUMN_LAYOUT = [
-        Column(name="Selected", field=None),
-        Column(name="Last upd.", field=DeviceStateField.LAST_UPDATED),
+    TABLE_COLUMN_LAYOUT: ClassVar[list[Column]] = [
+        Column(name="■", field=None),
         Column(name="IP address", field=DeviceStateField.IP),
-        Column(name="PING", field=DeviceStateField.PING),
         Column(name="ADB", field=DeviceStateField.ADB),
+        Column(name="Last upd.", field=DeviceStateField.LAST_UPDATED),
+        Column(name="PING", field=DeviceStateField.PING),
         Column(name="USB", field=DeviceStateField.USB),
         Column(name="App", field=DeviceStateField.APP_ACTIVE),
         Column(name="API", field=DeviceStateField.APP_API_STATUS),
-        Column(name="Device", field=DeviceStateField.DEVICE_NAME),
-        Column(name="Frame", field=DeviceStateField.FRAME_NAME),
-        Column(name="Battery", field=DeviceStateField.BATTERY),
-        Column(name="Storage", field=DeviceStateField.STORAGE),
         Column(name="Recording state", field=DeviceStateField.PL_REC),
         Column(name="Red light indic.", field=DeviceStateField.RED_LIGHT_INDICATORS),
+        Column(name="Battery", field=DeviceStateField.BATTERY),
+        Column(name="Storage", field=DeviceStateField.STORAGE),
+        Column(name="Device", field=DeviceStateField.DEVICE_NAME),
+        Column(name="Frame", field=DeviceStateField.FRAME_NAME),
     ]
 
     _config: TableAppConfig 
