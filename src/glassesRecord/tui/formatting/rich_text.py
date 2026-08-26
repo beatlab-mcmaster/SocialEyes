@@ -24,7 +24,7 @@ def as_colored_text(val, **kwargs):
         else:
             return Text(str(val), style=get_style_num(val, kwargs['thresh_low'], kwargs['thresh_high']))
     else:
-        return Text(str(val))
+        return Text(str(val), style=kwargs.get('style', Style()))
 
 def get_style_num(val, thresh_low, thresh_high) -> Style:
     """Determine the style for numeric values based on thresholds.

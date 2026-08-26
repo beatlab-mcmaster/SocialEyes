@@ -3,6 +3,8 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
+from rich.style import Style
+
 from .device_state import DeviceState, DeviceStateField, DeviceStateSnapshot
 from .formatting.rich_text import as_colored_text
 from .formatting.text import time_ago
@@ -15,7 +17,7 @@ _FORMATTERS: dict[DeviceStateField, Callable[[Any], Any]] = {
     DeviceStateField.DEVICE_NAME: lambda v: v,  # plain text, no formatting
     DeviceStateField.USB: as_colored_text,
     DeviceStateField.FRAME_NAME: as_colored_text,
-    DeviceStateField.PL_REC: as_colored_text,
+    DeviceStateField.RECORDING_STATE: as_colored_text,
     DeviceStateField.RED_LIGHT_INDICATORS: lambda v: as_colored_text(v, reverse=True),
     DeviceStateField.BATTERY: lambda v: as_colored_text(v, thresh_low=25, thresh_high=50),
     DeviceStateField.STORAGE: lambda v: as_colored_text(v, thresh_low=25, thresh_high=50),
@@ -58,7 +60,15 @@ class DeviceTablePresenter:
             new_snapshot = DeviceStateSnapshot(state)
 
             # "Last updated" always refreshes, even if no tracked field changed
-            last_updated_val = as_colored_text(time_ago(now, new_snapshot.get(DeviceStateField.LAST_UPDATED), self._time_ago_threshold.get(ip_addr, self._time_ago_threshold[None])), thresh_low=5, thresh_high=30, reverse=True)
+            last_updated_val = time_ago(
+                now, 
+                new_snapshot.get(DeviceStateField.LAST_UPDATED), 
+                self._time_ago_threshold.get(ip_addr, self._time_ago_threshold[None])
+            )
+            last_updated_val = as_colored_text(
+                last_updated_val, 
+                style=Style(color="red") if "<" not in last_updated_val else Style(color="green")
+            )
             updates.append((ip_addr, DeviceStateField.LAST_UPDATED, last_updated_val))
 
             # Other fields only update if they have changed since the last snapshot

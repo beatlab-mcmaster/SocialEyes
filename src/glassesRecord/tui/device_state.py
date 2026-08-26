@@ -26,7 +26,7 @@ class DeviceStateField(str, Enum):
     VIBRATOR_EVENTS = 'vibrator_events'
     RED_LIGHT_INDICATORS = 'red_light_indicators'
 
-    PL_REC = 'PL_Rec'
+    RECORDING_STATE = 'recording_state'
     LAST_UPDATED = 'last_updated'
 
     PHONE_LOCKED = 'phone_locked'
@@ -36,7 +36,7 @@ def format_recording_status(active_recordings: dict | None) -> str:
     if not active_recordings:
         return ''
     by_start_time = dict(sorted(active_recordings.items(), key=lambda x: x[1].started_at or datetime.min, reverse=True))
-    return ', '.join(f"{short_recording_id(rid)} since {format_date(r.started_at)} ({r.state.name})" for rid, r in by_start_time.items())
+    return ', '.join(f"{r.state.name} ({short_recording_id(rid)}, started at {format_date(r.started_at)})" for rid, r in by_start_time.items())
 
 class DeviceStateSnapshot:
     """
@@ -62,7 +62,7 @@ class DeviceStateSnapshot:
             self._data[DeviceStateField.MODULE_SERIAL] = state.neon_hardware_ids.module_serial if state.neon_hardware_ids else None
             self._data[DeviceStateField.RECORDING_INFO] = state.active_recordings
             self._data[DeviceStateField.RED_LIGHT_INDICATORS] = any(ri.red_light_indicator_detected for ri in state.active_recordings.values()) if state.active_recordings else None
-            self._data[DeviceStateField.PL_REC] = format_recording_status(state.active_recordings)
+            self._data[DeviceStateField.RECORDING_STATE] = format_recording_status(state.active_recordings)
             self._data[DeviceStateField.LAST_UPDATED] = state.latest_statistics.created_at if state.latest_statistics else state.now
             self._data[DeviceStateField.PHONE_LOCKED] = state.latest_statistics.phone.display.is_locked if state.latest_statistics else None
             self._data[DeviceStateField.APP_VERSION] = state.latest_statistics.neon.app_version.version_name if state.latest_statistics else None

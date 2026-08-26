@@ -18,7 +18,7 @@ from .tui.widgets import SelectableRowsDataTable
 
 
 class MonitoringInterval(Enum):
-    FAST = 1
+    FAST = 2
     MEDIUM = 5
     SLOW = 20
 
@@ -47,12 +47,12 @@ class TableApp(App):
         Column(name="IP address", field=DeviceStateField.IP),
         Column(name="ADB", field=DeviceStateField.ADB),
         Column(name="Last upd.", field=DeviceStateField.LAST_UPDATED),
-        Column(name="PING", field=DeviceStateField.PING),
+        Column(name="Ping", field=DeviceStateField.PING),
         Column(name="USB", field=DeviceStateField.USB),
         Column(name="App", field=DeviceStateField.APP_ACTIVE),
         Column(name="API", field=DeviceStateField.APP_API_STATUS),
-        Column(name="Recording state", field=DeviceStateField.PL_REC),
-        Column(name="Red light indic.", field=DeviceStateField.RED_LIGHT_INDICATORS),
+        Column(name="Rec. state", field=DeviceStateField.RECORDING_STATE),
+        Column(name="Red light ind.", field=DeviceStateField.RED_LIGHT_INDICATORS),
         Column(name="Battery", field=DeviceStateField.BATTERY),
         Column(name="Storage", field=DeviceStateField.STORAGE),
         Column(name="Device", field=DeviceStateField.DEVICE_NAME),
@@ -267,4 +267,4 @@ class TableApp(App):
             self._table_controller.time_ago_threshold(interval.value, device_ips)
             self._monitoring_interval = interval
 
-        await self._run_with_all_selected_devices(f"Setting monitoring interval to {interval.name.lower()}", f)        
+        await self._run_with_all_selected_devices(f"Setting monitoring interval to {interval.value}s", f)        
