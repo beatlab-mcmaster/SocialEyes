@@ -1,6 +1,7 @@
 import datetime
-from dataclasses import dataclass
 from enum import Enum
+
+from pydantic import BaseModel
 
 from .scripts.statistics_schema import Mp4File, NeonRecording
 
@@ -12,8 +13,7 @@ class RecordingState(Enum):
     RECORDING_HAS_NO_MP4 = 3,
     RECORDING_UNSAVED_OR_FAILED = 4,
 
-@dataclass
-class RecordingInfo:
+class RecordingInfo(BaseModel):
     workspace_id: str
     recording_id: str
     state: RecordingState

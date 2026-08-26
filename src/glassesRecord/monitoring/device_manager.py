@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .device import DeviceState
+from .device_state_logger import DeviceStateLogger
 from .device_worker import device_worker_process
 
 
@@ -57,7 +58,11 @@ class DeviceManager:
     def devices(self) -> list[DeviceConfig]:
         return [w.device_config for w in self._workers.values()]
 
-    def __init__(self, process_factory: Callable[..., multiprocessing.Process] = create_device_worker_process):
+    def __init__(
+            self, 
+            process_factory: Callable[..., multiprocessing.Process] = create_device_worker_process,
+            device_state_logger: DeviceStateLogger | None = None,
+        ):
         self._logger = logging.getLogger("DeviceManager")
         self._logger_queue = multiprocessing.Queue()
         self._logger_queue_listener = logging.handlers.QueueListener(self._logger_queue, *logging.getLogger().handlers)
@@ -68,6 +73,8 @@ class DeviceManager:
 
         self._collect_states_task = None
         self._collect_states_stop_event = asyncio.Event()
+
+        self._device_state_logger = device_state_logger
 
         self._device_states = {}
 
@@ -134,7 +141,7 @@ class DeviceManager:
         """Collect device states from worker processes."""
         while not self._collect_states_stop_event.is_set():
             now = asyncio.get_event_loop().time()
-            self._poll_worker_pipes()
+            await self._poll_worker_pipes()
             time_elapsed = asyncio.get_event_loop().time() - now
             timeout = max(0, self._DEVICE_POLLING_INTERVAL_S - time_elapsed)
             try:
@@ -142,13 +149,14 @@ class DeviceManager:
             except asyncio.TimeoutError:
                 pass
 
-    def _poll_worker_pipes(self):
+    async def _poll_worker_pipes(self):
         for ip_addr, worker in self._workers.items():
             try:
-                while worker.pipe.poll():
+                if worker.pipe.poll():
                     state_update: DeviceState = worker.pipe.recv()
-                    self._logger.info(f"Received state update from {ip_addr}: {state_update}")
                     self._device_states[ip_addr] = state_update
+                    if self._device_state_logger is not None:
+                        await self._device_state_logger.log_if_due(state_update)
             except Exception:
                 self._logger.exception(f"Error polling worker pipe for {ip_addr}")
 

@@ -16,7 +16,7 @@ async def run_device_worker(
     await device.start()
     try:
         while not stop_event.is_set():
-            while pipe.poll():
+            if pipe.poll():
                 message = pipe.recv()
                 if isinstance(message, tuple) and len(message) == 2:
                     command, value = message

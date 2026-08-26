@@ -7,3 +7,4 @@ requests
 pupil_labs_realtime_api
 pytz
 pydantic
+anyio

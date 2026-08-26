@@ -9,8 +9,9 @@ import datetime
 import logging
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from pathlib import Path
+
+from pydantic import BaseModel, Field
 
 from glassesRecord.monitoring.recording_state import (
     RecordingInfo,
@@ -23,19 +24,16 @@ from .scripts.statistics_schema import DeviceStatistics
 REPO_STATISTICS_SCRIPT_PATH_STR = str((Path(__file__).parent / 'scripts' / 'statistics.sh').resolve())
 PHONE_STATISTICS_SCRIPT_PATH_STR = '/storage/self/primary/Documents/SocialEyes/statistics.sh'
 
-@dataclass
-class NeonHardwareIDs:
+class NeonHardwareIDs(BaseModel):
     device_name: str | None = None
     device_id: str | None = None
     frame_name: str | None = None
     module_serial: str | None = None
 
-@dataclass
-class DeviceState:
+class DeviceState(BaseModel):
     ip_addr: str
-    now: datetime.datetime = field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc),
-        compare=False
+    now: datetime.datetime = Field(
+        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
     ping: int | None = None
     adb_connection_is_established: bool | None = None
@@ -137,7 +135,6 @@ class Device:
                 try:
                     current_state = await asyncio.wait_for(self._poll_once(), timeout=self._monitoring_interval_s + 1)
                 except asyncio.TimeoutError:
-                    self._logger.warning("Polling cycle exceeded the monitoring interval.")
                     current_state = DeviceState(ip_addr=self._ip_addr)
                 self._record_state(current_state)
 

@@ -15,6 +15,7 @@ from .clients.neon_http import (
 )
 from .monitoring.device import DeviceState
 from .monitoring.device_manager import DeviceConfig, DeviceManager
+from .monitoring.device_state_logger import DeviceStateLogger
 from .monitoring.offset_logger import OffsetLogger
 
 
@@ -70,7 +71,8 @@ class SessionController:
 
         self._init_logging(config)
 
-        self._device_manager = DeviceManager()
+        device_state_logger = DeviceStateLogger(snapshot_dir=config.session_dir, snapshot_interval_s=60)
+        self._device_manager = DeviceManager(device_state_logger=device_state_logger)
         for ip_addr in config.device_ips:
             self._device_manager.register_device(str(ip_addr))
         self._logger.info(f"Registered {len(self._device_manager.devices)} devices: {self._device_manager.devices}")
