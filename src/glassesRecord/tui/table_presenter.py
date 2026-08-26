@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
@@ -18,9 +19,13 @@ _FORMATTERS: dict[DeviceStateField, Callable[[Any], Any]] = {
     DeviceStateField.RED_LIGHT_INDICATORS: lambda v: as_colored_text(v, reverse=True),
     DeviceStateField.BATTERY: lambda v: as_colored_text(v, thresh_low=25, thresh_high=50),
     DeviceStateField.STORAGE: lambda v: as_colored_text(v, thresh_low=25, thresh_high=50),
+    DeviceStateField.PHONE_LOCKED: as_colored_text,
+    DeviceStateField.APP_VERSION: lambda v: v,  # plain text, no formatting
 }
 
 class DeviceTablePresenter:
+
+    _logger: logging.Logger = logging.getLogger(__name__)
 
     _current_snapshots: dict[str, DeviceStateSnapshot]
     _time_ago_threshold: dict[str | None, float]
@@ -59,9 +64,14 @@ class DeviceTablePresenter:
             # Other fields only update if they have changed since the last snapshot
             changed_fields = new_snapshot.get_changed_fields(old_snapshot)
             for field, raw_value in changed_fields.items():
+                if field == DeviceStateField.LAST_UPDATED:
+                    continue  # Already handled above
                 formatter = _FORMATTERS.get(field)
                 if formatter is not None:
                     updates.append((ip_addr, field, formatter(raw_value)))
+                else:
+                    self._logger.warning("No formatter defined for field: %s", field)
+                    updates.append((ip_addr, field, raw_value))
 
             # Update the rendered state for the next comparison
             self._current_snapshots[ip_addr] = new_snapshot

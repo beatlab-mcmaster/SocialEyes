@@ -57,6 +57,8 @@ class TableApp(App):
         Column(name="Storage", field=DeviceStateField.STORAGE),
         Column(name="Device", field=DeviceStateField.DEVICE_NAME),
         Column(name="Frame", field=DeviceStateField.FRAME_NAME),
+        Column(name="Locked", field=DeviceStateField.PHONE_LOCKED),
+        Column(name="App version", field=DeviceStateField.APP_VERSION),
     ]
 
     _config: TableAppConfig 

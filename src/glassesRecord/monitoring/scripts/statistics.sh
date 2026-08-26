@@ -180,11 +180,27 @@ EOF
   rm -f "$temp_list"
 }
 
+get_neon_app_version() {
+    local package=$(dumpsys package com.pupillabs.neoncomp)
+    local version_code=$(echo "$package" | awk -F= '/versionCode/ {sub(/[[:space:]].*/, "", $2); print $2; exit}')
+    local version_name=$(echo "$package" | awk -F= '/versionName/ {print $2; exit}')
+    local last_update_time_str=$(echo "$package" | awk -F= '/lastUpdateTime/ {print $2; exit}')
+    cat <<EOF
+{
+        "version_name": "$version_name",
+        "version_code": "$version_code",
+        "last_update_time_str": "$last_update_time_str"
+    }
+EOF
+}
+
 get_neon_data() {
   local active=$(am stack list | grep neon >/dev/null && echo "true" || echo "false")
+  read app_version_code app_version_name <<< "$(get_neon_app_version)"
 
     cat <<EOF
 {
+    "app_version": $(get_neon_app_version),
     "is_active": "$active",
     "recordings": [
 $(get_recordings)

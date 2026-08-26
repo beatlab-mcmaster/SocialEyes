@@ -29,6 +29,9 @@ class DeviceStateField(str, Enum):
     PL_REC = 'PL_Rec'
     LAST_UPDATED = 'last_updated'
 
+    PHONE_LOCKED = 'phone_locked'
+    APP_VERSION = 'app_version'
+
 def format_recording_status(active_recordings: dict | None) -> str:
     if not active_recordings:
         return ''
@@ -61,6 +64,8 @@ class DeviceStateSnapshot:
             self._data[DeviceStateField.RED_LIGHT_INDICATORS] = any(ri.red_light_indicator_detected for ri in state.active_recordings.values()) if state.active_recordings else None
             self._data[DeviceStateField.PL_REC] = format_recording_status(state.active_recordings)
             self._data[DeviceStateField.LAST_UPDATED] = state.latest_statistics.created_at if state.latest_statistics else state.now
+            self._data[DeviceStateField.PHONE_LOCKED] = state.latest_statistics.phone.display.is_locked if state.latest_statistics else None
+            self._data[DeviceStateField.APP_VERSION] = state.latest_statistics.neon.app_version.version_name if state.latest_statistics else None
         else:
             for field in DeviceStateField:
                 self._data[field] = None
@@ -78,7 +83,7 @@ class DeviceStateSnapshot:
         if old is None:
             changed_fields = dict(self._data)
         else:
-            for key in self._data.keys():
+            for key in self._data:
                 if self._data[key] != old._data.get(key):
                     changed_fields[key] = self._data[key]
         return changed_fields

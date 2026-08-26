@@ -15,7 +15,13 @@ class NeonRecording(BaseModel):
     recording_id: str
     mp4_files: list[Mp4File]
 
+class NeonAppVersion(BaseModel):
+    version_name: str
+    version_code: str
+    last_update_time_str: str
+
 class NeonStatistics(BaseModel):
+    app_version: NeonAppVersion
     is_active: bool
     recordings: list[NeonRecording]
 
