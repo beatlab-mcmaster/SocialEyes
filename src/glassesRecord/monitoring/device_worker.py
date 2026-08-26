@@ -16,7 +16,7 @@ async def run_device_worker(
     await device.start()
     try:
         while not stop_event.is_set():
-            if pipe.poll():
+            while pipe.poll():
                 message = pipe.recv()
                 if isinstance(message, tuple) and len(message) == 2:
                     command, value = message
@@ -31,7 +31,8 @@ def device_worker_process(
         port: int, 
         pipe: Connection, 
         log_queue: Queue,
-        stop_event: multiprocessing.synchronize.Event
+        stop_event: multiprocessing.synchronize.Event,
+        log_level: str
     ):
     """
     This is the worker process that manages a single device.
@@ -41,7 +42,7 @@ def device_worker_process(
     # Setup logging to send logs to the main process via a queue
     log_queue_handler = logging.handlers.QueueHandler(log_queue)
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(log_level)
     root_logger.addHandler(log_queue_handler)
     
     def on_change(new_state: DeviceState | None):

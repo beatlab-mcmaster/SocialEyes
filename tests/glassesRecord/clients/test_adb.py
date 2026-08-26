@@ -70,6 +70,11 @@ async def test_fetch_socialeyes_statistics_success(monkeypatch, adb_run_socialey
     }
   },
   "neon": {
+    "app_version": {
+        "version_name": "1.2.3-prod",
+        "version_code": "1",
+        "last_update_time_str": "2026-01-01 01:23:45"
+    },
     "is_active": "false",
     "recordings": [
 

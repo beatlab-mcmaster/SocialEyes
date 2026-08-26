@@ -42,6 +42,7 @@ def test_device_worker_process_stops_cleanly():
             child_pipe,
             log_queue,
             stop_event,
+            "INFO"
         ),
     )
 

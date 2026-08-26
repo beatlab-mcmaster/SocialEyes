@@ -9,7 +9,7 @@ import csv
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..clients.neon_time_echo import NeonTimeOffsetResponse, estimate_time_offset
 
@@ -41,7 +41,7 @@ class OffsetLogger:
 
         os.makedirs(log_dir, exist_ok=True)
 
-        self._log_file = os.path.join(log_dir, f"{datetime.now().strftime('%y%m%dT%H%M%S')}_offsets.csv")
+        self._log_file = os.path.join(log_dir, f"{datetime.now(timezone.utc).strftime('%y%m%dT%H%M%S')}_offsets.csv")
         self._log_interval = log_interval
         self._device_ips = device_ips
 
@@ -62,8 +62,6 @@ class OffsetLogger:
             self._stop_event.set()
             await self._task
             self._task = None
-        else:
-            self._logger.warning("OffsetLogger stop_logging called, but no logging task was running.")
 
     # -------------------------------------------------------
     # Private helper methods

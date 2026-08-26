@@ -54,6 +54,5 @@ class DeviceTableView:
         row_key = self._ip_to_row_key.get(ip_addr)
         column_key = self._field_to_column_key.get(field)
         if row_key is None or column_key is None:
-            self._logger.warning("Row or column not found for IP: %s, field: %s", ip_addr, field)
             return
         self._table.update_cell(row_key, column_key, value, update_width=True)

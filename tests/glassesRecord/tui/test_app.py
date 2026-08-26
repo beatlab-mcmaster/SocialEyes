@@ -24,10 +24,6 @@ def app(monkeypatch, fake_session_controller, tmp_path):
         "glassesRecord.app.create_session_controller",
         Mock(return_value=fake_session_controller),
     )
-    monkeypatch.setattr(
-        "glassesRecord.app.configure_logging",
-        Mock(return_value=Mock()),
-    )
 
     config = TableAppConfig(
         log_level="INFO",

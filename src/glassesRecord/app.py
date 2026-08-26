@@ -8,7 +8,7 @@ from textual.binding import Binding, BindingType
 from textual.widgets import Footer, Input, Label
 
 from .app_config import TableAppConfig
-from .app_utils import Theme, configure_logging, create_session_controller
+from .app_utils import Theme, create_session_controller
 from .monitoring.device import DeviceState
 from .session_controller import SessionController
 from .tui.status_log import StatusLogController
@@ -80,14 +80,14 @@ class TableApp(App):
 
     def __init__(self, config: TableAppConfig):
         super().__init__()
+        self._table_app_logger = logging.getLogger('glassesRecord_TUI')
         try:
             session_controller = create_session_controller(config)
-        except OSError as e:
-            print(f"Error creating session directory: {e}")
+        except OSError:
+            self._table_app_logger.exception("Error creating session directory")
             self.exit(return_code=1)
             return
         self._session_controller = session_controller
-        self._table_app_logger = configure_logging(session_controller, config)
         self._status_log_controller = StatusLogController(max_len=config.status_log_max_len)
         self._config = config
         self._device_states = {}

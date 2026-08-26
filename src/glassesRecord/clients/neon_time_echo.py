@@ -1,8 +1,12 @@
 
 import asyncio
+import logging
 from dataclasses import dataclass
 
 from pupil_labs.realtime_api.time_echo import TimeOffsetEstimator
+
+# Suppress verbose logging from the PL Realtime API
+logging.getLogger('pupil_labs.realtime_api.time_echo').setLevel(logging.ERROR)
 
 from .core import TIMEOUT_SECONDS, ClientResponse
 

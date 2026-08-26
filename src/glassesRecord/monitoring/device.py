@@ -48,7 +48,7 @@ class Device:
 
     _ip_addr: str
     _port: int
-    _on_change: Callable[[DeviceState | None], None] | None = None
+    _on_change: Callable[[DeviceState], None] | None = None
     _monitoring_interval_s: float = 2
 
     # Internal state
@@ -122,7 +122,7 @@ class Device:
             try:
                 await self._background_task
             except asyncio.CancelledError:
-                self._logger.info(f"Background task for {self._ip_addr} cancelled successfully.")
+                pass
 
     # -------------------------------------------------------
     # Private helper methods
@@ -134,7 +134,11 @@ class Device:
             try:
                 current_cycle_start = asyncio.get_running_loop().time()
 
-                current_state = await self._poll_once()
+                try:
+                    current_state = await asyncio.wait_for(self._poll_once(), timeout=self._monitoring_interval_s + 1)
+                except asyncio.TimeoutError:
+                    self._logger.warning("Polling cycle exceeded the monitoring interval.")
+                    current_state = DeviceState(ip_addr=self._ip_addr)
                 self._record_state(current_state)
 
                 # Sleep to maintain the target cycle period
@@ -147,10 +151,9 @@ class Device:
                 if self._background_task_interrupt_event.is_set():
                     self._background_task_interrupt_event.clear()
             except asyncio.CancelledError:
-                self._logger.info(f"Background worker cancelled for {self._ip_addr}")
                 raise
-            except Exception as e:
-                self._logger.error(f"Unexpected error in background worker: {e}", exc_info=e)
+            except Exception:
+                self._logger.exception("Unexpected error in background worker")
 
     async def _poll_once(self) -> DeviceState:
         await self._update_connectivity()
@@ -159,9 +162,12 @@ class Device:
         return self._build_state()
 
     async def _update_connectivity(self) -> None:
-        self._ping = await self._determine_ping()
-        self._adb_connection_is_established = await self._determine_adb_connection_is_established()
-        self._neon_api_is_available = await self._determine_neon_api_is_available()
+        tasks = [
+            self._determine_ping(),
+            self._determine_adb_connection_is_established(),
+            self._determine_neon_api_is_available()
+        ]
+        await asyncio.gather(*tasks)
 
     async def _ensure_statistics_script(self) -> None:
         if not self._statistics_script_pushed and self._ping is not None and self._adb_connection_is_established: 
@@ -171,12 +177,12 @@ class Device:
                 self._logger.error(f"Failed to push statistics.sh script to device {self._ip_addr}.")
 
     async def _update_statistics(self) -> None:
-        self._neon_hardware_ids = await self._determine_neon_hardware_ids()
-        if self._statistics_script_pushed:
-            statistics = await self._fetch_statistics()
-            if statistics is not None:
-                self._statistics_history.append(statistics)
-            self._active_recordings = await self._determine_active_recordings()
+        tasks = [
+            self._determine_neon_hardware_ids(),
+            self._fetch_statistics(),
+            self._determine_active_recordings()
+        ]
+        await asyncio.gather(*tasks)
 
     def _build_state(self) -> DeviceState:
         return DeviceState(
@@ -200,25 +206,28 @@ class Device:
         response = await self._clients.push_statistics_script(self._ip_addr, REPO_STATISTICS_SCRIPT_PATH_STR, PHONE_STATISTICS_SCRIPT_PATH_STR, self._port)
         return response.result if response.result is not None else False
 
-    async def _fetch_statistics(self) -> DeviceStatistics | None:
-        response = await self._clients.fetch_socialeyes_statistics(self._ip_addr, self._port)
-        return response.result
+    async def _fetch_statistics(self) -> None:
+        if self._statistics_script_pushed:
+            response = await self._clients.fetch_socialeyes_statistics(self._ip_addr, self._port)
+            statistics = response.result
+            if statistics is not None:
+                self._statistics_history.append(statistics)
 
-    async def _determine_ping(self) -> int | None:
+    async def _determine_ping(self) -> None:
         ping_response = await self._clients.ping_device(self._ip_addr)
-        return ping_response.result
+        self._ping = ping_response.result
 
-    async def _determine_adb_connection_is_established(self) -> bool | None:
+    async def _determine_adb_connection_is_established(self) -> None:
         response = await self._clients.check_adb_connection(self._ip_addr, self._port)
-        return response.result
+        self._adb_connection_is_established = response.result
 
-    async def _determine_neon_api_is_available(self) -> bool | None:
+    async def _determine_neon_api_is_available(self) -> None:
         response = await self._clients.is_neon_api_accessible(self._ip_addr)
-        return response.result
+        self._neon_api_is_available = response.result
 
-    async def _determine_neon_hardware_ids(self) -> NeonHardwareIDs | None:
+    async def _determine_neon_hardware_ids(self) -> None:
         response = await self._clients.get_neon_hardware_ids(self._ip_addr)
-        return NeonHardwareIDs(
+        self._neon_hardware_ids = NeonHardwareIDs(
             device_name=response.device_name,
             device_id=response.device_id,
             frame_name=response.frame_name,
@@ -229,7 +238,7 @@ class Device:
         response = await self._clients.check_red_light_flashing_indicators(self._ip_addr, self._port, workspace_id, recording_id)
         return response.result
 
-    async def _determine_active_recordings(self) -> dict[str, RecordingInfo] | None:
+    async def _determine_active_recordings(self) -> None:
         result = None
         if self._latest_statistics is not None and self._latest_statistics.neon.recordings is not None:
             result = {}
@@ -266,4 +275,4 @@ class Device:
                     details={mp4.file_name: mp4 for mp4 in rec.mp4_files} if rec.mp4_files else None,
                     red_light_indicator_detected=red_light_indicator_detected
                 )
-        return result
+        self._active_recordings = result

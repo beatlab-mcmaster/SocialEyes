@@ -32,7 +32,7 @@ class SessionController:
 
     OFFSET_LOGGER_ALL_KEY = "all"  # Key for the offset logger when in single session mode
 
-    _logger: logging.Logger
+    _logger: logging.Logger = logging.getLogger(__name__)
 
     _config: SessionControllerConfig
 
@@ -66,31 +66,20 @@ class SessionController:
 
     def __init__(self, 
                  config: SessionControllerConfig):
-        logging.basicConfig(
-            filename=os.path.join(config.session_dir, 'logs.txt'),
-            encoding='utf-8',
-            level=config.log_level, # change to DEBUG if required
-            format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s'
-        )
-        self._logger = logging.getLogger(__name__)
-        self._config = config
+        assert os.path.exists(config.session_dir), f"Session directory does not exist: {config.session_dir}"
 
-        assert os.path.exists(self._config.session_dir), f"Session directory does not exist: {config.session_dir}"
-        self._events_file = os.path.join(self._config.session_dir, "events.json")
+        self._init_logging(config)
 
         self._device_manager = DeviceManager()
-        for ip_addr in self._config.device_ips:
+        for ip_addr in config.device_ips:
             self._device_manager.register_device(str(ip_addr))
+        self._logger.info(f"Registered {len(self._device_manager.devices)} devices: {self._device_manager.devices}")
 
-        self._offset_logger_interval = self._config.offset_logger_interval
+        self._offset_logger_interval = config.offset_logger_interval
         self._offset_loggers = {}
 
-        self._logger.info(f"SessionController initialized with \n"
-                          f"  session ID: {self.session_id}, \n"
-                          f"  session directory: {self.session_dir}, \n"
-                          f"  devices: {self.device_ip_addrs}, \n"
-                          f"  single session mode: {self._config.is_single_session_mode}, \n"
-                          f"  offset logger interval: {self._offset_logger_interval} seconds")
+        self._events_file = os.path.join(config.session_dir, "events.json")
+        self._config = config
 
     # -------------------------------------------------------
     # Monitoring
@@ -102,9 +91,11 @@ class SessionController:
             for dev in self.device_ip_addrs:
                 self._device_manager.set_monitoring_interval(dev, monitoring_interval)
         await self._device_manager.start_all()
+        self._logger.info("Started monitoring registered devices.")
 
     async def stop_device_monitoring(self):
         await self._device_manager.stop_all()
+        self._logger.info("Stopped monitoring registered devices.")
     
     def get_all_device_states(self) -> dict[str, DeviceState]:
         return self._device_manager.get_all_device_states()
@@ -127,17 +118,17 @@ class SessionController:
             # One offset logger for all devices
             if not self._offset_loggers.get(SessionController.OFFSET_LOGGER_ALL_KEY):
                 ol = OffsetLogger(device_ips, log_dir=self._config.session_dir, log_interval=self._offset_logger_interval)
-                self._logger.info(f"Starting Offset logger at {ol.log_file}")
                 ol.start_logging()
                 self._offset_loggers[SessionController.OFFSET_LOGGER_ALL_KEY] = ol
+                self._logger.info("Started offset logging for all devices at %s", ol.log_file)
         else:
             # Separate offset logger for each device
             for dev in device_ips:
                 if not self._offset_loggers.get(dev):
                     ol = OffsetLogger([dev], log_dir=os.path.join(self._config.session_dir, str(dev)), log_interval=self._offset_logger_interval)
-                    self._logger.info(f"Starting Offset logger at {ol.log_file} for device: {dev}")
                     ol.start_logging()
                     self._offset_loggers[dev] = ol
+                    self._logger.info("Started offset logging for device %s at %s", dev, ol.log_file)
 
         # Start recording
         if self._config.is_single_session_mode:
@@ -146,7 +137,14 @@ class SessionController:
             device_ips = [d.ip_addr for d in self._device_manager.devices]
         
         t = [start_neon_recording(d) for d in device_ips]
-        await asyncio.gather(*t, return_exceptions=True)
+        futures = await asyncio.gather(*t, return_exceptions=True)
+        for ip_addr, future in zip(device_ips, futures):
+            if isinstance(future, Exception):
+                self._logger.error(f"Error starting recording for {ip_addr}: {future}")
+            elif isinstance(future, SimpleClientResponse) and future.result is False:
+                self._logger.error(f"Failed to start recording for {ip_addr}: {', '.join(future.error_messages)}")
+            else:
+                self._logger.info(f"Successfully started recording for {ip_addr}")
 
     async def stop_and_save_recording(self, device_ips: list[str] = []) -> None:
         """
@@ -157,7 +155,6 @@ class SessionController:
         device_ips : list[str], optional
             List of device IP addresses to stop recording on. If empty, recording will be stopped on all devices.
         """
-        self._logger.info(f"Stopping recording on {len(device_ips)} device(s): {device_ips}")
         await self._stop_recording(device_ips, save=True)
 
     async def stop_and_discard_recording(self, device_ips: list[str] = []) -> None:
@@ -169,7 +166,6 @@ class SessionController:
         device_ips : list[str], optional
             List of device IP addresses to stop recording on. If empty, recording will be stopped on all devices.
         """
-        self._logger.info(f"Discarding recording on {len(device_ips)} device(s): {device_ips}")
         await self._stop_recording(device_ips, save=False)
 
     async def restart_app_on_devices(self, device_ips: list[str] = []) -> None:
@@ -183,17 +179,14 @@ class SessionController:
             List of device IP addresses to restart app on. If empty, app will be restart on all devices.
         """
         if self._is_restart_app_in_progress:
-            self._logger.info('Another restart progress is already in progress, nothing to do...')
             return
 
         self._is_restart_app_in_progress = True
         devices = [d for d in self._device_manager.devices if d.ip_addr in device_ips]
 
         async def _do_restart_app(device: DeviceConfig):
-            self._logger.info(f'Restarting app on {device.ip_addr}...')
             await stop_neon_companion_app(device.ip_addr, device.port)
             await start_neon_companion_app(device.ip_addr, device.port)
-            self._logger.info(f'Restarting app on {device.ip_addr} has finished!')
 
         t = [_do_restart_app(d) for d in devices]
         await asyncio.gather(*t, return_exceptions=True)
@@ -212,9 +205,9 @@ class SessionController:
         futures = await asyncio.gather(*tasks, return_exceptions=True)
         for ip_addr, future in zip(device_ips, futures):
             if isinstance(future, Exception):
-                self._logger.info(f"Error reconnecting ADB for {ip_addr}: {future}")
+                self._logger.warning(f"Error reconnecting ADB for {ip_addr}: {future}. Try restarting the adb server.")
             elif isinstance(future, SimpleClientResponse) and future.result is False:
-                self._logger.info(f"Failed to reconnect ADB for {ip_addr}: {', '.join(future.error_messages)}")
+                self._logger.warning(f"Failed to reconnect ADB for {ip_addr}: {', '.join(future.error_messages)}. Try restarting the adb server.")
             else:
                 self._logger.info(f"Successfully reconnected ADB for {ip_addr}")
 
@@ -248,6 +241,16 @@ class SessionController:
     # -------------------------------------------------------
     # Private helper methods
     # -------------------------------------------------------
+
+    def _init_logging(self, config: SessionControllerConfig) -> None:
+        log_file_path = os.path.join(config.session_dir, 'logs.txt')
+        logging.basicConfig(
+            filename=log_file_path,
+            encoding='utf-8',
+            level=config.log_level, # change to DEBUG if required
+            format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s'
+        )
+        self._logger.info("Logging to file: %s", log_file_path)
     
     def _log_event(self, events_file: str, event_text: str) -> None:
         try:
@@ -285,8 +288,17 @@ class SessionController:
             if len(device_ips) != 0:
                 self._logger.warning("In single session mode, device_ips parameter is ignored. Recording will be stopped on all registered devices.")
             device_ips = [d.ip_addr for d in self._device_manager.devices]
-        if save:
-            t = [stop_and_save_neon_recording(d) for d in device_ips]
-        else:
-            t = [cancel_neon_recording(d) for d in device_ips]
-        await asyncio.gather(*t, return_exceptions=True)
+
+        fn = stop_and_save_neon_recording if save else cancel_neon_recording
+        verb = "stopping and saving" if save else "stopping and discarding"
+        self._logger.info(f"{verb.capitalize()} recording for devices: {device_ips}")
+
+        t = [fn(d) for d in device_ips]
+        futures = await asyncio.gather(*t, return_exceptions=True)
+        for ip_addr, future in zip(device_ips, futures):
+            if isinstance(future, Exception):
+                self._logger.error(f"Error {verb} recording for {ip_addr}: {future}")
+            elif isinstance(future, SimpleClientResponse) and future.result is False:
+                self._logger.error(f"Failed {verb} recording for {ip_addr}: {', '.join(future.error_messages)}")
+            else:
+                self._logger.info(f"Successfully {verb} recording for {ip_addr}")

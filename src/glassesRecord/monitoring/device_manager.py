@@ -28,16 +28,17 @@ def create_device_worker_process(
         port: int, 
         pipe: multiprocessing.connection.Connection, 
         log_queue: multiprocessing.Queue, 
-        stop_event: multiprocessing.synchronize.Event
+        stop_event: multiprocessing.synchronize.Event,
+        log_level: str
     ) -> multiprocessing.Process:
     return multiprocessing.Process(
         target=device_worker_process,
-        args=(ip_addr, port, pipe, log_queue, stop_event)
+        args=(ip_addr, port, pipe, log_queue, stop_event, log_level)
     )
 
 class DeviceManager:
 
-    _DEVICE_POLLING_INTERVAL_S: float = 1.0
+    _DEVICE_POLLING_INTERVAL_S: float = 0.5
 
     _process_factory: Callable[..., multiprocessing.Process]
 
@@ -76,13 +77,14 @@ class DeviceManager:
         If the device is already registered, this method does nothing.
         """
         if ip_addr in self._workers:
-            self._logger.warning(f"Device {ip_addr} is already registered.")
             return
         
         parent_conn, child_conn = multiprocessing.Pipe()
         stop_event = multiprocessing.Event()
 
-        p = self._process_factory(ip_addr, port, child_conn, self._logger_queue, stop_event)
+        log_level = logging.getLogger().getEffectiveLevel()
+
+        p = self._process_factory(ip_addr, port, child_conn, self._logger_queue, stop_event, log_level)
         p.start()
         child_conn.close()  # Close the child end in the parent process
 
@@ -98,7 +100,6 @@ class DeviceManager:
         Start the device state collection task if it's not already running.
         """
         if self._collect_states_task is not None and not self._collect_states_task.done():
-            self._logger.warning("Device state collection task is already running.")
             return
         self._collect_states_stop_event.clear()
         self._collect_states_task = asyncio.create_task(self._collect_states())
@@ -144,11 +145,12 @@ class DeviceManager:
     def _poll_worker_pipes(self):
         for ip_addr, worker in self._workers.items():
             try:
-                if worker.pipe.poll():
+                while worker.pipe.poll():
                     state_update: DeviceState = worker.pipe.recv()
+                    self._logger.info(f"Received state update from {ip_addr}: {state_update}")
                     self._device_states[ip_addr] = state_update
-            except Exception as e:
-                self._logger.error(f"Error polling worker pipe for {ip_addr}: {e}")
+            except Exception:
+                self._logger.exception(f"Error polling worker pipe for {ip_addr}")
 
     def _stop_worker(self, worker: DeviceWorkerHandle, join_timeout: float):
         worker.process.terminate()

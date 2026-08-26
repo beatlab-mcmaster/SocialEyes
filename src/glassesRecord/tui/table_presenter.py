@@ -10,6 +10,7 @@ from .formatting.rich_text import as_colored_text
 from .formatting.text import time_ago
 
 _FORMATTERS: dict[DeviceStateField, Callable[[Any], Any]] = {
+    DeviceStateField.IP: lambda v: v,
     DeviceStateField.PING: lambda v: as_colored_text(v, thresh_low=200, thresh_high=500, reverse=True),
     DeviceStateField.ADB: as_colored_text,
     DeviceStateField.APP_ACTIVE: as_colored_text,
@@ -76,14 +77,32 @@ class DeviceTablePresenter:
             for field, raw_value in changed_fields.items():
                 if field == DeviceStateField.LAST_UPDATED:
                     continue  # Already handled above
-                formatter = _FORMATTERS.get(field)
+                formatter = _FORMATTERS.get(field, lambda v: v) # Default to identity function if no formatter is defined
                 if formatter is not None:
                     updates.append((ip_addr, field, formatter(raw_value)))
-                else:
-                    self._logger.warning("No formatter defined for field: %s", field)
-                    updates.append((ip_addr, field, raw_value))
 
             # Update the rendered state for the next comparison
             self._current_snapshots[ip_addr] = new_snapshot
 
+        self._log_diff(updates)
+
         return updates
+
+    def _log_diff(self, updates: list[tuple[str, DeviceStateField, Any]]):
+        ip_addrs = {ip_addr for ip_addr, _, _ in updates}
+        for ip_addr in ip_addrs:
+            _updates = [
+                f"{field.name}: {value}" 
+                for _, field, value in updates
+                if _ == ip_addr and 
+                not (
+                    (field in [DeviceStateField.LAST_UPDATED, DeviceStateField.RECORDING_INFO]) or
+                    (field == DeviceStateField.PING and value not in ['-', None]) # i.e., only log ping updates when the value is None, indicating a failure to ping
+                )
+            ]
+            if len(_updates) > 0:
+                self._logger.info(
+                    "Updates for %s: %s", 
+                    ip_addr, 
+                    _updates
+                )

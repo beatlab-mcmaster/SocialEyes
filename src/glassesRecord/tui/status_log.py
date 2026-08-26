@@ -1,4 +1,10 @@
+import logging
+
+
 class StatusLogController:
+
+    _logger: logging.Logger = logging.getLogger(__name__)
+
     def __init__(self, max_len: int):
         self._messages = []
         self._max_len = max_len
@@ -10,6 +16,7 @@ class StatusLogController:
         """
         self._messages.append(message)
         self._messages = self._messages[-self._max_len:]
+        self._logger.info(f"Status log updated: {message}")
         return self.text
 
     @property

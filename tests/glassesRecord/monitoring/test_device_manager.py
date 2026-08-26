@@ -15,7 +15,8 @@ def fake_process_factory():
         port: int, 
         pipe: multiprocessing.connection.Connection, 
         log_queue: multiprocessing.Queue, 
-        stop_event: multiprocessing.synchronize.Event
+        stop_event: multiprocessing.synchronize.Event,
+        log_level: str
     ) -> multiprocessing.Process:
         # Create a Mock process that does nothing
         process = Mock(spec=multiprocessing.Process)
