@@ -6,7 +6,7 @@ from glassesRecord.clients.core import exists_as_path_or_command, fetch_command_
 async def test_fetch_command_output_success():
     """Test that fetch_command_output returns a successful ProcessResponse for a simple command."""
     sys_executable = sys.executable
-    cmd = f"{sys_executable} -c 'print(\"Hello, World!\")'"
+    cmd = f'{sys_executable} -c "print(\'Hello, World!\')"'
     response = await fetch_command_output(cmd)
 
     assert response.return_code == 0
