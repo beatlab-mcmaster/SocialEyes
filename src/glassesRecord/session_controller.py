@@ -96,7 +96,11 @@ class SessionController:
     # Monitoring
     # -------------------------------------------------------
 
-    async def start_device_monitoring(self):
+    async def start_device_monitoring(self, monitoring_interval: int | None = None):
+        """Start monitoring all registered devices. If `monitoring_interval` is provided, set it for all devices."""
+        if monitoring_interval is not None:
+            for dev in self.device_ip_addrs:
+                self._device_manager.set_monitoring_interval(dev, monitoring_interval)
         await self._device_manager.start_all()
 
     def stop_device_monitoring(self):
@@ -225,6 +229,21 @@ class SessionController:
             The text of the event to log.
         """
         self._log_event(self._events_file, event_text)
+
+    async def set_monitoring_interval(self, interval_seconds: float, device_ips: list[str] = []) -> None:
+        """
+        Set the monitoring interval for the specified devices.
+        
+        Parameters
+        ----------
+        interval_seconds : float
+            The new monitoring interval in seconds.
+        device_ips : list[str], optional
+            List of device IP addresses to set the monitoring interval on. If empty, the interval will be set on all devices.
+        """
+        for dev in device_ips:
+            self._device_manager.set_monitoring_interval(dev, interval_seconds)
+
 
     # -------------------------------------------------------
     # Private helper methods

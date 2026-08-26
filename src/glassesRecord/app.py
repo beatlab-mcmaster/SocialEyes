@@ -1,10 +1,10 @@
 import logging
 from collections.abc import Callable, Coroutine
+from enum import Enum
 from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.reactive import reactive
 from textual.widgets import Footer, Input, Label
 
 from .app_config import TableAppConfig
@@ -16,6 +16,11 @@ from .tui.table_controller import DeviceTableController
 from .tui.table_view import Column, DeviceStateField
 from .tui.widgets import SelectableRowsDataTable
 
+
+class MonitoringInterval(Enum):
+    FAST = 1
+    MEDIUM = 5
+    SLOW = 20
 
 class TableApp(App):
 
@@ -31,6 +36,9 @@ class TableApp(App):
             description="Cancel Recording"),
         Binding(key="t", action="restart_app_on_devices", description="Restart App"),
         Binding(key="a", action="reconnect_adb", description="Reconnect adb"),
+        Binding(key="1", action="monitoring_interval_fast", description=f"Monitor @ {MonitoringInterval.FAST.value}s"),
+        Binding(key="2", action="monitoring_interval_medium", description=f"Monitor @ {MonitoringInterval.MEDIUM.value}s"),
+        Binding(key="3", action="monitoring_interval_slow", description=f"Monitor @ {MonitoringInterval.SLOW.value}s"),
         Binding(key="d", action="toggle_dark", description="Toggle dark mode"),
     ]
 
@@ -58,7 +66,8 @@ class TableApp(App):
     # Device table widget
     _table_widget: SelectableRowsDataTable | None
     _table_controller: DeviceTableController | None
-    _device_states: reactive[dict[str, DeviceState]] = reactive({}, recompose=False)
+    _device_states: dict[str, DeviceState]
+    _monitoring_interval: MonitoringInterval | None
 
     # Status log widget
     _status_log_widget: Label | None
@@ -79,6 +88,7 @@ class TableApp(App):
         self._table_app_logger = configure_logging(session_controller, config)
         self._status_log_controller = StatusLogController(max_len=config.status_log_max_len)
         self._config = config
+        self._device_states = {}
 
     # -------------------------------------------------------
     # Textual lifecycle
@@ -118,7 +128,9 @@ class TableApp(App):
         self._events_input_widget = self.query_one(Input)
 
         # Schedule periodic updates
-        await self._session_controller.start_device_monitoring()
+        self._monitoring_interval = MonitoringInterval.FAST
+        await self._session_controller.start_device_monitoring(self._monitoring_interval.value)
+        self._table_controller.time_ago_threshold(self._monitoring_interval.value)
         self.set_interval(1, self._update_device_states)
 
         session_mode_str = "single-session mode" if self._config.is_single_session_mode else "multi-session mode"
@@ -145,13 +157,7 @@ class TableApp(App):
         self._session_controller.log_event(event_text)
 
         # Clear box
-        self._events_input_widget.value = ""
-
-    async def watch__device_states(self, states: dict[str, DeviceState]) -> None:
-        assert self._table_controller is not None, "Device table controller is not initialized."
-        # Apply updates to TUI
-        with self.app.batch_update():
-            self._table_controller.update_table(states)
+        self._events_input_widget.value = ""        
 
     # -------------------------------------------------------
     # Actions (= `BINDINGS`)
@@ -204,6 +210,18 @@ class TableApp(App):
             Theme.LIGHT if self.theme == Theme.DARK else Theme.DARK
         )
 
+    async def action_monitoring_interval_fast(self) -> None:
+        """Set the device monitoring interval to 1 second."""
+        await self._set_monitoring_interval(MonitoringInterval.FAST)
+
+    async def action_monitoring_interval_medium(self) -> None:
+        """Set the device monitoring interval to 5 seconds."""
+        await self._set_monitoring_interval(MonitoringInterval.MEDIUM)
+
+    async def action_monitoring_interval_slow(self) -> None:
+        """Set the device monitoring interval to 20 seconds."""
+        await self._set_monitoring_interval(MonitoringInterval.SLOW)
+
     # -------------------------------------------------------
     # Private helper methods
     # -------------------------------------------------------
@@ -230,4 +248,22 @@ class TableApp(App):
             self._status_widget_push_message(f"    {verb} action failed: {e!s}")
 
     def _update_device_states(self) -> None:
+        assert self._table_controller is not None, "Device table controller is not initialized."
         self._device_states = self._session_controller.get_all_device_states()
+        # Apply updates to TUI
+        with self.app.batch_update():
+            self._table_controller.update_table(self._device_states)
+
+    async def _set_monitoring_interval(self, interval: MonitoringInterval) -> None:
+        """Update the monitoring interval for all devices.
+
+        Args:
+            interval: The new monitoring interval.
+        """
+        async def f(device_ips: list[str]) -> None:
+            assert self._table_controller is not None, "Device table controller is not initialized."
+            await self._session_controller.set_monitoring_interval(interval.value, device_ips)
+            self._table_controller.time_ago_threshold(interval.value, device_ips)
+            self._monitoring_interval = interval
+
+        await self._run_with_all_selected_devices(f"Setting monitoring interval to {interval.name.lower()}", f)        

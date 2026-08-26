@@ -11,10 +11,17 @@ from .device import Device, DeviceState
 async def run_device_worker(
     device: Device,
     stop_event: multiprocessing.synchronize.Event,
+    pipe: Connection
 ) -> None:
     await device.start()
     try:
         while not stop_event.is_set():
+            if pipe.poll():
+                message = pipe.recv()
+                if isinstance(message, tuple) and len(message) == 2:
+                    command, value = message
+                    if command == "set_monitoring_interval":
+                        device.monitoring_interval_s = value
             await asyncio.sleep(1)
     finally:
         await device.stop()
@@ -45,7 +52,7 @@ def device_worker_process(
     asyncio.set_event_loop(loop)
 
     try:
-        loop.run_until_complete(run_device_worker(device, stop_event))
+        loop.run_until_complete(run_device_worker(device, stop_event, pipe))
     finally:
         pipe.close()
         loop.close()

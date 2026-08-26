@@ -6,10 +6,18 @@ from .widgets import SelectableRowsDataTable
 
 
 class DeviceTableController:
-    def __init__(self, table_widget: SelectableRowsDataTable, ip_addrs: list[str], column_layout: list[Column]):
+    def __init__(
+              self,
+              table_widget: SelectableRowsDataTable,
+              ip_addrs: list[str],
+              column_layout: list[Column]
+    ):
         self._view = DeviceTableView(table_widget, ip_addrs, column_layout)
         self._presenter = DeviceTablePresenter()
         self._column_layout = column_layout
+
+    def time_ago_threshold(self, threshold_seconds: float, ip_addrs: list[str] | None = None) -> None:
+        self._presenter.time_ago_threshold(threshold_seconds, ip_addrs)
 
     def selected_ip_addrs(self) -> list[str]:
             return self._view.selected_ip_addrs()

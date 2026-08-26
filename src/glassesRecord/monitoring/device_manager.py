@@ -37,7 +37,7 @@ def create_device_worker_process(
 
 class DeviceManager:
 
-    _target_cycle_period_s: float = 1.0
+    _DEVICE_POLLING_INTERVAL_S: float = 1.0
 
     _process_factory: Callable[..., multiprocessing.Process]
 
@@ -119,6 +119,13 @@ class DeviceManager:
     def get_all_device_states(self) -> dict[str, DeviceState]:
         return self._device_states.copy()
 
+    def set_monitoring_interval(self, ip_addr: str, interval_s: float):
+        worker = self._workers[ip_addr]
+        try:
+            worker.pipe.send(("set_monitoring_interval", interval_s))
+        except Exception as e:
+            self._logger.error(f"Failed to set monitoring interval for {ip_addr}: {e}")
+    
     # -------------------------------------------------------
     # Private helper methods
     # -------------------------------------------------------
@@ -129,7 +136,7 @@ class DeviceManager:
             now = asyncio.get_event_loop().time()
             self._poll_worker_pipes()
             time_elapsed = asyncio.get_event_loop().time() - now
-            timeout = max(0, self._target_cycle_period_s - time_elapsed)
+            timeout = max(0, self._DEVICE_POLLING_INTERVAL_S - time_elapsed)
             try:
                 await asyncio.wait_for(self._collect_states_stop_event.wait(), timeout=timeout)
             except asyncio.TimeoutError:

@@ -23,9 +23,18 @@ _FORMATTERS: dict[DeviceStateField, Callable[[Any], Any]] = {
 class DeviceTablePresenter:
 
     _current_snapshots: dict[str, DeviceStateSnapshot]
+    _time_ago_threshold: dict[str | None, float]
 
     def __init__(self):
         self._current_snapshots: dict[str, DeviceStateSnapshot] = {}
+        self._time_ago_threshold = {None: 1}
+
+    def time_ago_threshold(self, threshold_seconds: float, ip_addrs: list[str] | None = None) -> None:
+        if ip_addrs is None:
+            self._time_ago_threshold[None] = threshold_seconds
+        else:
+            for ip_addr in ip_addrs:
+                self._time_ago_threshold[ip_addr] = threshold_seconds
 
     def diff_updates(self, states: dict[str, DeviceState]) -> list[tuple[str, DeviceStateField, Any]]:
         """
@@ -44,7 +53,7 @@ class DeviceTablePresenter:
             new_snapshot = DeviceStateSnapshot(state)
 
             # "Last updated" always refreshes, even if no tracked field changed
-            last_updated_val = as_colored_text(time_ago(now, new_snapshot.get(DeviceStateField.LAST_UPDATED)))
+            last_updated_val = as_colored_text(time_ago(now, new_snapshot.get(DeviceStateField.LAST_UPDATED), self._time_ago_threshold.get(ip_addr, self._time_ago_threshold[None])), thresh_low=5, thresh_high=30, reverse=True)
             updates.append((ip_addr, DeviceStateField.LAST_UPDATED, last_updated_val))
 
             # Other fields only update if they have changed since the last snapshot

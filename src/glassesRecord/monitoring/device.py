@@ -49,23 +49,25 @@ class Device:
     _ip_addr: str
     _port: int
     _on_change: Callable[[DeviceState | None], None] | None = None
-    _target_cycle_period_s: float = 2
+    _monitoring_interval_s: float = 2
 
     # Internal state
     _background_task: asyncio.Task | None
+    _background_task_interrupt_event: asyncio.Event
     _statistics_script_pushed: bool
     _statistics_history: deque[DeviceStatistics]
     _state_history: deque[DeviceState]
     _active_recordings: dict[str, RecordingInfo] | None
 
     @property
-    def target_cycle_period_s(self) -> float:
-        return self._target_cycle_period_s
+    def monitoring_interval_s(self) -> float:
+        return self._monitoring_interval_s
 
-    @target_cycle_period_s.setter
-    def target_cycle_period_s(self, value: float):
-        """Set the target cycle period in seconds. The value must be at least 1 second."""
-        self._target_cycle_period_s = max(1, value)
+    @monitoring_interval_s.setter
+    def monitoring_interval_s(self, value: float):
+        """Set the monitoring interval in seconds."""
+        self._monitoring_interval_s = value
+        self._background_task_interrupt_event.set() # Apply new interval immediately
 
     @property
     def latest_state(self) -> DeviceState | None:
@@ -98,6 +100,7 @@ class Device:
         self._clients = clients if clients is not None else DeviceClients()
 
         self._background_task = None
+        self._background_task_interrupt_event = asyncio.Event()
         self._statistics_script_pushed = False
         self._statistics_history = deque(maxlen=history_max_length)
         self._state_history = deque(maxlen=history_max_length)
@@ -106,18 +109,25 @@ class Device:
         self._logger = logging.getLogger(f"Device-{self._ip_addr}:{self._port}")
 
     async def start(self):
+        self._background_task_interrupt_event.clear()
         self._background_task = asyncio.create_task(self._background_worker_run())
 
     async def stop(self):
         if self._background_task:
+            self._background_task_interrupt_event.set()
             self._background_task.cancel()
             try:
                 await self._background_task
             except asyncio.CancelledError:
                 pass
 
+    # -------------------------------------------------------
+    # Private helper methods
+    # -------------------------------------------------------
+
     async def _background_worker_run(self):
-        while True:
+        assert self._background_task is not None, "Background task should be initialized before running."
+        while not self._background_task.cancelled():
             try:
                 current_cycle_start = asyncio.get_running_loop().time()
 
@@ -126,14 +136,19 @@ class Device:
 
                 # Sleep to maintain the target cycle period
                 elapsed_seconds = asyncio.get_running_loop().time() - current_cycle_start
-                if elapsed_seconds < self._target_cycle_period_s:
-                    await asyncio.sleep(self._target_cycle_period_s - elapsed_seconds)
+                timeout = max(0, self._monitoring_interval_s - elapsed_seconds)
+                try:
+                    await asyncio.wait_for(self._background_task_interrupt_event.wait(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    pass
+                finally:
+                    if self._background_task_interrupt_event.is_set():
+                        self._background_task_interrupt_event.clear()
             except asyncio.CancelledError:
                 self._logger.info(f"Background worker cancelled for {self._ip_addr}")
                 raise
             except Exception as e:
                 self._logger.error(f"Unexpected error in background worker: {e}", exc_info=e)
-                await asyncio.sleep(5) # Wait 5 seconds before retrying the next cycle
 
     async def _poll_once(self) -> DeviceState:
         await self._update_connectivity()
