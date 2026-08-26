@@ -147,9 +147,8 @@ class TableApp(App):
         # Clear box
         self._events_input_widget.value = ""
 
-    async def watch_device_states(self, states: dict[str, DeviceState]) -> None:
+    async def watch__device_states(self, states: dict[str, DeviceState]) -> None:
         assert self._table_controller is not None, "Device table controller is not initialized."
-
         # Apply updates to TUI
         with self.app.batch_update():
             self._table_controller.update_table(states)

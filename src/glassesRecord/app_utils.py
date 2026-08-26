@@ -28,10 +28,11 @@ def create_session_controller(config: "TableAppConfig") -> SessionController:
         raise RuntimeError(f"ADB_PATH '{adb_path}' is not a valid path or command")
 
     session_id = datetime.now().strftime('%y%m%dT%H%M%S') # Session ID created using timestamp; could also be created using UUID, user input, etc.
-    session_dir = os.path.join(config.log_dir, session_id)
+    session_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), config.log_dir, session_id)
     os.makedirs(session_dir)
 
     session_controller_config = SessionControllerConfig(
+        log_level=config.log_level,
         session_id=session_id,
         session_dir=session_dir,
         is_single_session_mode=config.is_single_session_mode,
@@ -56,11 +57,6 @@ def configure_logging(session: SessionController, config: "TableAppConfig") -> l
     logging.Logger
         A logger configured for the TUI.
     """
-    logging.basicConfig(
-        filename=os.path.join(session.session_dir, 'logs.txt'),
-        encoding='utf-8',
-        level=config.log_level, # change to DEBUG if required
-        format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s')
 
     # Suppress verbose logging from the PL Realtime API
     logging.getLogger('pupil_labs.realtime_api.time_echo').setLevel(logging.ERROR)

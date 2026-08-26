@@ -34,6 +34,7 @@ def device_worker_process(
     # Setup logging to send logs to the main process via a queue
     log_queue_handler = logging.handlers.QueueHandler(log_queue)
     root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
     root_logger.addHandler(log_queue_handler)
     
     def on_change(new_state: DeviceState | None):

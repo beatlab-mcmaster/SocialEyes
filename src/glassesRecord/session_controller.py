@@ -20,6 +20,8 @@ from .monitoring.offset_logger import OffsetLogger
 
 @dataclass
 class SessionControllerConfig:
+    log_level: str # INFO, DEBUG, ...
+
     session_id: str
     session_dir: str
     is_single_session_mode: bool
@@ -64,6 +66,12 @@ class SessionController:
 
     def __init__(self, 
                  config: SessionControllerConfig):
+        logging.basicConfig(
+            filename=os.path.join(config.session_dir, 'logs.txt'),
+            encoding='utf-8',
+            level=config.log_level, # change to DEBUG if required
+            format='[%(asctime)s] %(levelname)s [%(name)s] %(message)s'
+        )
         self._logger = logging.getLogger(__name__)
         self._config = config
 
@@ -76,6 +84,13 @@ class SessionController:
 
         self._offset_logger_interval = self._config.offset_logger_interval
         self._offset_loggers = {}
+
+        self._logger.info(f"SessionController initialized with \n"
+                          f"  session ID: {self.session_id}, \n"
+                          f"  session directory: {self.session_dir}, \n"
+                          f"  devices: {self.device_ip_addrs}, \n"
+                          f"  single session mode: {self._config.is_single_session_mode}, \n"
+                          f"  offset logger interval: {self._offset_logger_interval} seconds")
 
     # -------------------------------------------------------
     # Monitoring
@@ -196,6 +211,8 @@ class SessionController:
                 self._logger.info(f"Error reconnecting ADB for {ip_addr}: {future}")
             elif isinstance(future, SimpleClientResponse) and future.result is False:
                 self._logger.info(f"Failed to reconnect ADB for {ip_addr}: {', '.join(future.error_messages)}")
+            else:
+                self._logger.info(f"Successfully reconnected ADB for {ip_addr}")
 
     def log_event(self, event_text: str) -> None:
         """
