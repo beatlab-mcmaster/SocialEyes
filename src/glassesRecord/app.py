@@ -130,7 +130,7 @@ class TableApp(App):
         self._events_input_widget = self.query_one(Input)
 
         # Schedule periodic updates
-        self._monitoring_interval = MonitoringInterval.FAST
+        self._monitoring_interval = MonitoringInterval.MEDIUM
         await self._session_controller.start_device_monitoring(self._monitoring_interval.value)
         self._table_controller.time_ago_threshold(self._monitoring_interval.value)
         self.set_interval(1, self._update_device_states)

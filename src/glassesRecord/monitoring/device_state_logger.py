@@ -2,11 +2,24 @@
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
+import json
 
 import anyio
 
 from glassesRecord.tui.device_state import DeviceState
 
+
+@dataclass
+class LoggingDueConditions:
+    never_logged: bool
+    time_exceeded: bool
+    ping_changed: bool
+    adb_connection_changed: bool
+    recording_state_changed: bool
+
+    def is_due(self) -> bool:
+        return self.never_logged or self.time_exceeded or self.ping_changed or self.adb_connection_changed or self.recording_state_changed
 
 class DeviceStateLogger:
     """
@@ -31,16 +44,28 @@ class DeviceStateLogger:
         """
         now = asyncio.get_event_loop().time()
         ip_addr = state.ip_addr
-        if self._is_due(state):
-            await self._log_state(state)
+        due_conditions = self._determine_logging_due(state)
+        if due_conditions.is_due():
+            await self._log_state(state, due_conditions)
             self._last_snapshot_time[ip_addr] = now
             self._last_snapshot[ip_addr] = state
 
-    async def _log_state(self, state: DeviceState):
+    async def _log_state(self, state: DeviceState, due_conditions: LoggingDueConditions):
         async with self._file_lock, await anyio.open_file(self._snapshot_file, "a") as f:
-            await f.write(state.model_dump_json() + "\n")
+            log_line = {
+                "timestamp": asyncio.get_event_loop().time(),
+                "due_conditions": {
+                    "never_logged": due_conditions.never_logged,
+                    "time_exceeded": due_conditions.time_exceeded,
+                    "ping_changed": due_conditions.ping_changed,
+                    "adb_connection_changed": due_conditions.adb_connection_changed,
+                    "recording_state_changed": due_conditions.recording_state_changed,
+                },
+                "state": json.loads(state.model_dump_json())
+            }
+            await f.write(json.dumps(log_line) + "\n")
 
-    def _is_due(self, state: DeviceState) -> bool:
+    def _determine_logging_due(self, state: DeviceState) -> LoggingDueConditions:
         """
         Checks if a snapshot is due for the given device state.
         """
@@ -54,10 +79,13 @@ class DeviceStateLogger:
         _adb_connection_changed = adb_connection_changed(old_state, state)
         _recording_state_changed = recording_state_changed(old_state, state)
 
-        result = never_logged or time_exceeded or _ping_changed or _adb_connection_changed or _recording_state_changed
-        if result and any([never_logged, _ping_changed, _adb_connection_changed, _recording_state_changed]): # Ignore time_exceeded for logging purposes, since it is expected to happen regularly
-            self._logger.info(f"Device state snapshot due for device {ip_addr}: never_logged={never_logged}, ping_changed={_ping_changed}, adb_connection_changed={_adb_connection_changed}, recording_state_changed={_recording_state_changed}")
-        return result
+        return LoggingDueConditions(
+            never_logged=never_logged,
+            time_exceeded=time_exceeded,
+            ping_changed=_ping_changed,
+            adb_connection_changed=_adb_connection_changed,
+            recording_state_changed=_recording_state_changed
+        )
 
 def adb_connection_changed(old_state: DeviceState | None, new_state: DeviceState) -> bool:
     adb_changed_from_none = old_state is not None and old_state.adb_connection_is_established is None and new_state.adb_connection_is_established is not None

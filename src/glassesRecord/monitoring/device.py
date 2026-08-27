@@ -144,7 +144,8 @@ class Device:
                 try:
                     await asyncio.wait_for(self._background_task_interrupt_event.wait(), timeout=timeout)
                 except asyncio.TimeoutError:
-                    pass
+                    if self._ping is not None or self._adb_connection_is_established is not None:
+                        self._logger.warning(f"Device {self._ip_addr} monitoring timed out after {elapsed_seconds:.2f}s (timeout={timeout:.2f}s). Consider increasing the monitoring interval.")
                 if self._background_task_interrupt_event.is_set():
                     self._background_task_interrupt_event.clear()
             except asyncio.CancelledError:
