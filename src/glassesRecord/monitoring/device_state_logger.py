@@ -1,9 +1,10 @@
 
 import asyncio
+import json
 import logging
 import os
 from dataclasses import dataclass
-import json
+import datetime
 
 import anyio
 
@@ -53,7 +54,7 @@ class DeviceStateLogger:
     async def _log_state(self, state: DeviceState, due_conditions: LoggingDueConditions):
         async with self._file_lock, await anyio.open_file(self._snapshot_file, "a") as f:
             log_line = {
-                "timestamp": asyncio.get_event_loop().time(),
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "due_conditions": {
                     "never_logged": due_conditions.never_logged,
                     "time_exceeded": due_conditions.time_exceeded,
