@@ -89,6 +89,10 @@ get_phone_data() {
     local ssid=$(echo "$wifi_out" | awk 'match($0, /SSID: "[^"]+"/) {print substr($0, RSTART + 7, RLENGTH - 8); exit}')
     local bssid=$(echo "$wifi_out" | awk 'match($0, /BSSID: [^ ,]+/) {print substr($0, RSTART + 7, RLENGTH - 7); exit}')
     local rssi=$(echo "$wifi_out" | awk 'match($0, /RSSI: -?[0-9]+/) {print substr($0, RSTART + 6, RLENGTH - 6); exit}')
+
+    # Android
+    local android_version=$(getprop ro.build.version.release)
+    local android_build=$(getprop ro.build.display.id)
     
     cat <<EOF
 {
@@ -111,7 +115,9 @@ $(get_connected_usb_devices)
       "ssid": "$ssid",
       "bssid": "$bssid",
       "rssi": $rssi
-    }
+    },
+    "android_version": "$android_version",
+    "android_build": "$android_build"
   }
 EOF
 }

@@ -51,6 +51,8 @@ class PhoneStatistics(BaseModel):
     display: DisplayStatistics
     usb_devices: list[UsbDeviceStatistics]
     wifi: WifiStatistics
+    android_version: str
+    android_build: str
 
 class DeviceStatistics(BaseModel):
     version: Literal["1.0"]
