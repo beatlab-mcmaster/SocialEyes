@@ -135,6 +135,8 @@ class Device:
                 try:
                     current_state = await asyncio.wait_for(self._poll_once(), timeout=self._monitoring_interval_s + 1)
                 except asyncio.TimeoutError:
+                    if self._ping is True or self._adb_connection_is_established is True:
+                        self._logger.warning(f"Timeout while polling statistics for device {self._ip_addr}. Consider increasing the monitoring interval.")
                     current_state = DeviceState(ip_addr=self._ip_addr)
                 self._record_state(current_state)
 
@@ -144,8 +146,7 @@ class Device:
                 try:
                     await asyncio.wait_for(self._background_task_interrupt_event.wait(), timeout=timeout)
                 except asyncio.TimeoutError:
-                    if self._ping is not None or self._adb_connection_is_established is not None:
-                        self._logger.warning(f"Device {self._ip_addr} monitoring timed out after {elapsed_seconds:.2f}s (timeout={timeout:.2f}s). Consider increasing the monitoring interval.")
+                    pass
                 if self._background_task_interrupt_event.is_set():
                     self._background_task_interrupt_event.clear()
             except asyncio.CancelledError:
