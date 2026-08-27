@@ -28,7 +28,7 @@ _FORMATTERS: dict[DeviceStateField, Callable[[Any], Any]] = {
 
 class DeviceTablePresenter:
 
-    _logger: logging.Logger = logging.getLogger(__name__)
+    _logger: logging.Logger = logging.getLogger("DeviceTablePresenter")
 
     _current_snapshots: dict[str, DeviceStateSnapshot]
     _time_ago_threshold: dict[str | None, float]

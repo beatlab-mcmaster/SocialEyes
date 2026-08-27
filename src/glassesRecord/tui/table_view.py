@@ -15,7 +15,7 @@ class Column:
 
 class DeviceTableView:
 
-    _logger: logging.Logger
+    _logger: logging.Logger = logging.getLogger("DeviceTableView")
 
     _table: SelectableRowsDataTable
     _column_keys: list[ColumnKey]
@@ -45,7 +45,6 @@ class DeviceTableView:
         self._ip_to_row_key = dict(zip(ip_addrs, self._row_keys))
 
         self._table = table
-        self._logger = logging.getLogger(__name__)
 
     def selected_ip_addrs(self) -> list[str]:
         return [row.data[self._ip_addr_col_index] for row in self._table.selected_rows]
@@ -56,3 +55,4 @@ class DeviceTableView:
         if row_key is None or column_key is None:
             return
         self._table.update_cell(row_key, column_key, value, update_width=True)
+        

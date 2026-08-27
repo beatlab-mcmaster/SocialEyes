@@ -3,7 +3,7 @@ import logging
 
 class StatusLogController:
 
-    _logger: logging.Logger = logging.getLogger(__name__)
+    _logger: logging.Logger = logging.getLogger("StatusLogController")
 
     def __init__(self, max_len: int):
         self._messages = []

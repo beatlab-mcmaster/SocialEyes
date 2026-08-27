@@ -33,7 +33,7 @@ class SessionController:
 
     OFFSET_LOGGER_ALL_KEY = "all"  # Key for the offset logger when in single session mode
 
-    _logger: logging.Logger = logging.getLogger(__name__)
+    _logger: logging.Logger = logging.getLogger("SessionController")
 
     _config: SessionControllerConfig
 

@@ -37,7 +37,7 @@ class OffsetLogger:
             log_dir (str, optional): Path to a custom log file. If not provided, a timestamped log file will be created.
             log_interval (int, optional): Time in seconds between logging offsets. Default is 10 seconds.
         """
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger("OffsetLogger")
 
         os.makedirs(log_dir, exist_ok=True)
 

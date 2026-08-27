@@ -14,7 +14,7 @@ class DeviceStateLogger:
     """
 
     _file_lock = asyncio.Lock()
-    _logger: logging.Logger = logging.getLogger(__name__)
+    _logger: logging.Logger = logging.getLogger("DeviceStateLogger")
 
     def __init__(self, snapshot_dir: str, snapshot_interval_s: float):
         assert os.path.exists(snapshot_dir), f"Snapshot directory {snapshot_dir} does not exist"
