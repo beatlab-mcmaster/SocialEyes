@@ -66,7 +66,7 @@ get_phone_data() {
     local display_out=$(dumpsys display)
     local window_out=$(dumpsys window)
     local battery_out=$(dumpsys battery)
-    local wifi_out=$(dumpsys wifi | grep "mWifiInfo")
+    local wifi_out=$(dumpsys wifi 2>/dev/null | grep -m 1 "mWifiInfo")
     
     # Parse display state from cached output
     local display_on=$(on_off_to_bool $(echo "$display_out" | awk -F= '/mScreenState/ {print $2; exit}'))
