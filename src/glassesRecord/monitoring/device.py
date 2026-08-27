@@ -212,6 +212,9 @@ class Device:
             statistics = response.result
             if statistics is not None:
                 self._statistics_history.append(statistics)
+            else:
+                if not response.timeout_occurred:
+                    self._logger.error(f"Failed to fetch statistics for device {self._ip_addr}.")
 
     async def _determine_ping(self) -> None:
         ping_response = await self._clients.ping_device(self._ip_addr)
