@@ -32,10 +32,10 @@ if __name__ == "__main__":
         sys.exit(0)
     elif action.startswith("Collect eye-tracking data"):
         try:
-            result = subprocess.run([sys.executable, "main.py"], check=True, cwd="src/glassesRecord/")
+            result = subprocess.run([sys.executable, "-m", "glassesRecord.main"], check=True, cwd="src")
         except subprocess.CalledProcessError as e:
-            print(f"Error occurred while running the script")
-            print("Please make sure that the src/glassesRecord/config.json file is correctly updated. You can also try executing the main.py script from src/glassesRecord")
+            print("Error occurred while running the script")
+            print("Please make sure that the src/glassesRecord/config.json file is correctly updated. You can also try executing the glassesRecord.main module from src/.")
     elif action.startswith("Collect central-camera data"):
         try:
             result = subprocess.run([sys.executable, "main.py"], check=True, cwd="src/centralCam/")
