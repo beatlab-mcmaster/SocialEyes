@@ -67,7 +67,9 @@ async def test_fetch_socialeyes_statistics_success(monkeypatch, adb_run_socialey
       "ssid": "TEST_net",
       "bssid": "12:34:56:78:9A:BC",
       "rssi": -34
-    }
+    },
+    "android_version": "14",
+    "android_build": "1234"
   },
   "neon": {
     "app_version": {
