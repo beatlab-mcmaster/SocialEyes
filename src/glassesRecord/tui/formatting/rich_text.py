@@ -15,7 +15,8 @@ def as_colored_text(val, **kwargs):
         Text: A styled Text object based on the value.
     """
     if val is None:
-        return '-'
+        none_style = kwargs.get('none_style', Style())
+        return Text('-', style=none_style)
     elif isinstance(val, bool):
         return Text(str(val), style=get_style_bool(val, kwargs.get('reverse', False)))
     elif isinstance(val, numbers.Number):

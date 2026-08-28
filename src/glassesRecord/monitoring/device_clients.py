@@ -16,18 +16,18 @@ from ..clients.neon_http import (
 from ..clients.ping import ping_device
 from .scripts.statistics_schema import DeviceStatistics
 
-PingDevice = Callable[[str], Awaitable[SimpleClientResponse[int]]]
-CheckAdbConnection = Callable[[str, int], Awaitable[SimpleClientResponse[bool]]]
-PushScript = Callable[[str, str, str, int], Awaitable[SimpleClientResponse[bool]]]
-CheckScript = Callable[[str, str, int], Awaitable[SimpleClientResponse[bool]]]
+PingDevice = Callable[[str, float], Awaitable[SimpleClientResponse[int]]]
+CheckAdbConnection = Callable[[str, int, float], Awaitable[SimpleClientResponse[bool]]]
+PushScript = Callable[[str, str, str, int, float], Awaitable[SimpleClientResponse[bool]]]
+CheckScript = Callable[[str, str, int, float], Awaitable[SimpleClientResponse[bool]]]
 FetchStatistics = Callable[
-    [str, int],
+    [str, int, float],
     Awaitable[SimpleClientResponse[DeviceStatistics | None]],
 ]
-CheckApi = Callable[[str], Awaitable[SimpleClientResponse[bool]]]
-GetHardwareIds = Callable[[str], Awaitable[NeonHardwareIdsResponse]]
+CheckApi = Callable[[str, float], Awaitable[SimpleClientResponse[bool]]]
+GetHardwareIds = Callable[[str, float], Awaitable[NeonHardwareIdsResponse]]
 CheckIndicators = Callable[
-    [str, int, str, str],
+    [str, int, str, str, float],
     Awaitable[SimpleClientResponse[bool]],
 ]
 

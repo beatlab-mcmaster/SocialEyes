@@ -11,7 +11,7 @@ from .formatting.text import time_ago
 
 _FORMATTERS: dict[DeviceStateField, Callable[[Any], Any]] = {
     DeviceStateField.IP: lambda v: v,
-    DeviceStateField.PING: lambda v: as_colored_text(v, thresh_low=200, thresh_high=500, reverse=True),
+    DeviceStateField.PING: lambda v: as_colored_text(v, thresh_low=500, thresh_high=1000, reverse=True, none_style=Style(color="red")),
     DeviceStateField.ADB: as_colored_text,
     DeviceStateField.APP_ACTIVE: as_colored_text,
     DeviceStateField.APP_API_STATUS: as_colored_text,

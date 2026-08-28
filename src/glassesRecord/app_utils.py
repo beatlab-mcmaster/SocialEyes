@@ -36,7 +36,8 @@ def create_session_controller(config: "TableAppConfig") -> SessionController:
         session_dir=session_dir,
         is_single_session_mode=config.is_single_session_mode,
         device_ips=config.device_ips,
-        offset_logger_interval=config.offset_logger_interval
+        offset_logger_interval=config.offset_logger_interval,
+        device_state_logger_interval=config.device_state_logger_interval
     )
     return SessionController(session_controller_config)
 

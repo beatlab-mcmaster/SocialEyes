@@ -9,7 +9,7 @@ PING_PATTERN = re.compile(r'ttl=\d+\s+time=([0-9.]+)\s+ms')
 def is_windows() -> bool:
     return os.name == 'nt'
 
-async def ping_device(ip_addr: str, timeout=TIMEOUT_SECONDS) -> SimpleClientResponse[int]:
+async def ping_device(ip_addr: str, timeout: float=TIMEOUT_SECONDS) -> SimpleClientResponse[int]:
     """
     Determines if a device is reachable by pinging it.
 

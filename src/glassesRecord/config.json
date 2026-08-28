@@ -11,6 +11,7 @@
         "path": "logs/",
         "level": "INFO",
         "interval": 10,
+        "device_state_logger_interval": 300,
         "TUI_messages_len": 10
     },
     "update_times": {

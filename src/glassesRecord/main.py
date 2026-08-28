@@ -48,6 +48,7 @@ if __name__ == "__main__":
         is_single_session_mode=config.get("single_session_mode", False),
         status_log_max_len=config["logs"]["TUI_messages_len"],
         offset_logger_interval=config["logs"]["interval"],
+        device_state_logger_interval=config["logs"]["device_state_logger_interval"]
     )
     app = TableApp(table_app_config)
     app.run()

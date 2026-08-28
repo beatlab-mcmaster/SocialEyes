@@ -45,8 +45,8 @@ class TableApp(App):
     TABLE_COLUMN_LAYOUT: ClassVar[list[Column]] = [
         Column(name="■", field=None),
         Column(name="IP address", field=DeviceStateField.IP),
-        Column(name="ADB", field=DeviceStateField.ADB),
         Column(name="Last upd.", field=DeviceStateField.LAST_UPDATED),
+        Column(name="ADB", field=DeviceStateField.ADB),
         Column(name="Ping", field=DeviceStateField.PING),
         Column(name="USB", field=DeviceStateField.USB),
         Column(name="App", field=DeviceStateField.APP_ACTIVE),

@@ -49,23 +49,23 @@ class DeviceStateSnapshot:
         self._data: dict[DeviceStateField, Any] = {}
         if state is not None:
             self._data[DeviceStateField.IP] = state.ip_addr
-            self._data[DeviceStateField.PING] = state.ping
+            self._data[DeviceStateField.LAST_UPDATED] = state.now
             self._data[DeviceStateField.ADB] = state.adb_connection_is_established
-            self._data[DeviceStateField.BATTERY] = state.latest_statistics.phone.battery_level if state.latest_statistics else None
-            self._data[DeviceStateField.STORAGE] = state.latest_statistics.phone.storage.free_gb if state.latest_statistics else None
-            self._data[DeviceStateField.USB] = any("Neon" in d.product_name if d.product_name else False for d in state.latest_statistics.phone.usb_devices) if state.latest_statistics else None
-            self._data[DeviceStateField.WIFI] = state.latest_statistics.phone.wifi.ssid if state.latest_statistics else None
-            self._data[DeviceStateField.APP_ACTIVE] = state.latest_statistics.neon.is_active if state.latest_statistics else None
-            self._data[DeviceStateField.APP_API_STATUS] = state.neon_api_is_available
-            self._data[DeviceStateField.DEVICE_NAME] = state.neon_hardware_ids.device_name if state.neon_hardware_ids else None
-            self._data[DeviceStateField.FRAME_NAME] = state.neon_hardware_ids.frame_name if state.neon_hardware_ids else None
-            self._data[DeviceStateField.MODULE_SERIAL] = state.neon_hardware_ids.module_serial if state.neon_hardware_ids else None
-            self._data[DeviceStateField.RECORDING_INFO] = state.active_recordings
-            self._data[DeviceStateField.RED_LIGHT_INDICATORS] = any(ri.red_light_indicator_detected for ri in state.active_recordings.values()) if state.active_recordings else None
-            self._data[DeviceStateField.RECORDING_STATE] = format_recording_status(state.active_recordings)
-            self._data[DeviceStateField.LAST_UPDATED] = state.latest_statistics.created_at if state.latest_statistics else state.now
-            self._data[DeviceStateField.PHONE_LOCKED] = state.latest_statistics.phone.display.is_locked if state.latest_statistics else None
-            self._data[DeviceStateField.APP_VERSION] = state.latest_statistics.neon.app_version.version_name if state.latest_statistics else None
+            self._data[DeviceStateField.PING] = state.ping
+
+            if state.ping is not None and state.adb_connection_is_established is True:
+                self._data[DeviceStateField.USB] = any("Neon" in d.product_name if d.product_name else False for d in state.latest_statistics.phone.usb_devices) if state.latest_statistics else None
+                self._data[DeviceStateField.APP_ACTIVE] = state.latest_statistics.neon.is_active if state.latest_statistics else None
+                self._data[DeviceStateField.APP_API_STATUS] = state.neon_api_is_available
+                self._data[DeviceStateField.RECORDING_STATE] = format_recording_status(state.active_recordings)
+                self._data[DeviceStateField.RED_LIGHT_INDICATORS] = any(ri.red_light_indicator_detected for ri in state.active_recordings.values()) if state.active_recordings else None
+                self._data[DeviceStateField.BATTERY] = state.latest_statistics.phone.battery_level if state.latest_statistics else None
+                self._data[DeviceStateField.STORAGE] = state.latest_statistics.phone.storage.free_gb if state.latest_statistics else None
+                self._data[DeviceStateField.DEVICE_NAME] = state.neon_hardware_ids.device_name if state.neon_hardware_ids else None
+                self._data[DeviceStateField.FRAME_NAME] = state.neon_hardware_ids.frame_name if state.neon_hardware_ids else None
+                self._data[DeviceStateField.MODULE_SERIAL] = state.neon_hardware_ids.module_serial if state.neon_hardware_ids else None
+                self._data[DeviceStateField.PHONE_LOCKED] = state.latest_statistics.phone.display.is_locked if state.latest_statistics else None
+                self._data[DeviceStateField.APP_VERSION] = state.latest_statistics.neon.app_version.version_name if state.latest_statistics else None
         else:
             for field in DeviceStateField:
                 self._data[field] = None
@@ -82,10 +82,13 @@ class DeviceStateSnapshot:
         changed_fields = {}
         if old is None:
             changed_fields = dict(self._data)
+        elif old == self:
+            changed_fields = {}
         else:
-            for key in self._data:
-                if self._data[key] != old._data.get(key):
-                    changed_fields[key] = self._data[key]
+            all_keys = set(self._data.keys()).union(set(old._data.keys()))
+            for key in all_keys:
+                if self._data.get(key) != old._data.get(key):
+                    changed_fields[key] = self._data.get(key)
         return changed_fields
 
     def get(self, field: DeviceStateField) -> Any:

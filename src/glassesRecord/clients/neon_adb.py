@@ -8,7 +8,7 @@ from .core import TIMEOUT_SECONDS, SimpleClientResponse
 NEON_COMPANION_APP_PACKAGE_NAME = "com.pupillabs.neoncomp"
 TASK_ID_PATTERN = re.compile(r"taskId=(\d+): com.pupillabs.neoncomp")
 
-async def check_red_light_flashing_indicators(ip_addr: str, port: int, workspace_id: str, recording_id: str) -> SimpleClientResponse[bool]:
+async def check_red_light_flashing_indicators(ip_addr: str, port: int, workspace_id: str, recording_id: str, timeout: float) -> SimpleClientResponse[bool]:
     """
     Check if the red light flashing indicator is present in the logs of the Neon recording.
     
@@ -20,7 +20,8 @@ async def check_red_light_flashing_indicators(ip_addr: str, port: int, workspace
     indicator_detected = False
         
     response = await fetch_adb_command_output(
-        f'-s {ip_addr}:{port} shell grep -e "raw has not changed" /storage/self/primary/Documents/Neon/{workspace_id}/{recording_id}/android.log'
+        f'-s {ip_addr}:{port} shell grep -e "raw has not changed" /storage/self/primary/Documents/Neon/{workspace_id}/{recording_id}/android.log',
+        timeout=timeout
     )
     if response.stdout is not None and len(response.stdout) > 0:
         for line in response.stdout.splitlines():

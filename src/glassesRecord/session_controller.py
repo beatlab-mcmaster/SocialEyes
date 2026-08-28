@@ -28,6 +28,7 @@ class SessionControllerConfig:
     is_single_session_mode: bool
     device_ips: list[str]
     offset_logger_interval: int
+    device_state_logger_interval: int
 
 class SessionController:
 
@@ -71,7 +72,7 @@ class SessionController:
 
         self._init_logging(config)
 
-        device_state_logger = DeviceStateLogger(snapshot_dir=config.session_dir, snapshot_interval_s=60)
+        device_state_logger = DeviceStateLogger(snapshot_dir=config.session_dir, snapshot_interval_s=config.device_state_logger_interval)
         self._device_manager = DeviceManager(device_state_logger=device_state_logger)
         for ip_addr in config.device_ips:
             self._device_manager.register_device(str(ip_addr))

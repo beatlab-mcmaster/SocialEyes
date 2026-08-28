@@ -1,14 +1,14 @@
 import json
 from dataclasses import dataclass
 
-from .core import ClientResponse, SimpleClientResponse
+from .core import TIMEOUT_SECONDS, ClientResponse, SimpleClientResponse
 from .http import fetch_http_get_response, fetch_http_post_response
 
 
-async def is_neon_api_accessible(ip_addr: str) -> SimpleClientResponse[bool]:
+async def is_neon_api_accessible(ip_addr: str, timeout: float=TIMEOUT_SECONDS) -> SimpleClientResponse[bool]:
     neon_api_is_available = None
     
-    response = await fetch_http_get_response(f'http://{ip_addr}:8080/api/status', timeout=10)
+    response = await fetch_http_get_response(f'http://{ip_addr}:8080/api/status', timeout=timeout)
     neon_api_is_available = response.status_code == 200
 
     return SimpleClientResponse(
@@ -24,7 +24,7 @@ class NeonHardwareIdsResponse(ClientResponse):
     frame_name: str | None
     module_serial: str | None
 
-async def get_neon_hardware_ids(ip_addr: str) -> NeonHardwareIdsResponse:
+async def get_neon_hardware_ids(ip_addr: str, timeout: float=TIMEOUT_SECONDS) -> NeonHardwareIdsResponse:
     """
     Get the hardware IDs of the Neon device.
 
@@ -42,7 +42,7 @@ async def get_neon_hardware_ids(ip_addr: str) -> NeonHardwareIdsResponse:
     frame_name = None
     module_serial = None
     
-    response = await fetch_http_get_response(f'http://{ip_addr}:8080/api/status', timeout=10)
+    response = await fetch_http_get_response(f'http://{ip_addr}:8080/api/status', timeout=timeout)
     errors = response.error_messages.copy()
     if response.status_code == 200 and response.response_text is not None:
         try:
@@ -69,7 +69,7 @@ async def get_neon_hardware_ids(ip_addr: str) -> NeonHardwareIdsResponse:
         module_serial=module_serial
     )
 
-async def start_neon_recording(ip_addr: str) -> SimpleClientResponse[str | None]:
+async def start_neon_recording(ip_addr: str, timeout: float=TIMEOUT_SECONDS) -> SimpleClientResponse[str | None]:
     """
     Start a recording on the Neon device.
     
@@ -79,7 +79,7 @@ async def start_neon_recording(ip_addr: str) -> SimpleClientResponse[str | None]
         A SimpleClientResponse object containing the recording ID if successful, or None if not.
     """
     recording_id = None
-    response = await fetch_http_post_response(f'http://{ip_addr}:8080/api/recording:start', data_json={})
+    response = await fetch_http_post_response(f'http://{ip_addr}:8080/api/recording:start', data_json={}, timeout=timeout)
     errors = response.error_messages.copy()
     if response.status_code == 200 and response.response_text is not None:
         try:
@@ -94,9 +94,9 @@ async def start_neon_recording(ip_addr: str) -> SimpleClientResponse[str | None]
         result=recording_id
     )
 
-async def stop_and_save_neon_recording(ip_addr: str) -> SimpleClientResponse[str | None]:
+async def stop_and_save_neon_recording(ip_addr: str, timeout: float=TIMEOUT_SECONDS) -> SimpleClientResponse[str | None]:
     recording_id = None
-    response = await fetch_http_post_response(f'http://{ip_addr}:8080/api/recording:stop_and_save', data_json={})
+    response = await fetch_http_post_response(f'http://{ip_addr}:8080/api/recording:stop_and_save', data_json={}, timeout=timeout)
     errors = response.error_messages.copy()
     if response.status_code == 200 and response.response_text is not None:
         try:
@@ -112,9 +112,9 @@ async def stop_and_save_neon_recording(ip_addr: str) -> SimpleClientResponse[str
         result=recording_id
     )
 
-async def cancel_neon_recording(ip_addr: str) -> SimpleClientResponse[str | None]:
+async def cancel_neon_recording(ip_addr: str, timeout: float=TIMEOUT_SECONDS) -> SimpleClientResponse[str | None]:
     recording_id = None
-    response = await fetch_http_post_response(f'http://{ip_addr}:8080/api/recording:cancel', data_json={})
+    response = await fetch_http_post_response(f'http://{ip_addr}:8080/api/recording:cancel', data_json={}, timeout=timeout)
     errors = response.error_messages.copy()
     if response.status_code == 200 and response.response_text is not None:
         try:

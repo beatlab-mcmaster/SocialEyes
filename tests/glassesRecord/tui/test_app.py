@@ -32,6 +32,7 @@ def app(monkeypatch, fake_session_controller, tmp_path):
         is_single_session_mode=False,
         status_log_max_len=10,
         offset_logger_interval=10,
+        device_state_logger_interval=10,
     )
 
     return TableApp(config)

@@ -1,7 +1,12 @@
 from unittest.mock import AsyncMock
 
 from glassesRecord.clients.core import ProcessResponse, SimpleClientResponse
-from glassesRecord.clients.neon_adb import check_red_light_flashing_indicators, get_neon_companion_app_task_id, start_neon_companion_app, stop_neon_companion_app
+from glassesRecord.clients.neon_adb import (
+    check_red_light_flashing_indicators,
+    get_neon_companion_app_task_id,
+    start_neon_companion_app,
+    stop_neon_companion_app,
+)
 
 
 async def test_check_red_light_flashing_indicators_indicator_present(monkeypatch):
@@ -23,7 +28,7 @@ async def test_check_red_light_flashing_indicators_indicator_present(monkeypatch
         mocked_fetch,
     )
 
-    response = await check_red_light_flashing_indicators(ip_addr, port, workspace_id, recording_id)
+    response = await check_red_light_flashing_indicators(ip_addr, port, workspace_id, recording_id, timeout=100)
     assert response.result is True
 
 async def test_check_red_light_flashing_indicators_indicator_not_present(monkeypatch):
@@ -45,7 +50,7 @@ async def test_check_red_light_flashing_indicators_indicator_not_present(monkeyp
         mocked_fetch,
     )
 
-    response = await check_red_light_flashing_indicators(ip_addr, port, workspace_id, recording_id)
+    response = await check_red_light_flashing_indicators(ip_addr, port, workspace_id, recording_id, timeout=100)
     assert response.result is False
 
 async def test_get_neon_companion_app_task_id_success(monkeypatch):

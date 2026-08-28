@@ -24,7 +24,7 @@ class ProcessResponse(ClientResponse):
     stdout: str | None
     stderr: str | None
 
-async def fetch_command_output(cmd, timeout=TIMEOUT_SECONDS) -> ProcessResponse:
+async def fetch_command_output(cmd, timeout: float=TIMEOUT_SECONDS) -> ProcessResponse:
     """
     Executes `cmd`. If execution exceeds `timeout` (seconds), kill process.
     If the process is killed due to timeout, the return code will be None, and stdout/stderr will be None.

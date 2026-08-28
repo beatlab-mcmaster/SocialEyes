@@ -12,3 +12,4 @@ class TableAppConfig:
     status_log_max_len: int
 
     offset_logger_interval: int
+    device_state_logger_interval: int

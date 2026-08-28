@@ -39,6 +39,7 @@ def session_controller(tmp_path, fake_device_manager):
         device_ips=["192.168.2.101", "192.168.2.102"],
         offset_logger_interval=10,
         log_level="INFO",
+        device_state_logger_interval=10
     )
     return SessionController(config)
 

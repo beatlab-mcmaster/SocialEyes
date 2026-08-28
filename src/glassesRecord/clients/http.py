@@ -11,7 +11,7 @@ class HttpResponse(ClientResponse):
     status_code: int | None
     response_text: str | None
 
-async def fetch_http_get_response(url, timeout=TIMEOUT_SECONDS) -> HttpResponse:
+async def fetch_http_get_response(url, timeout: float=TIMEOUT_SECONDS) -> HttpResponse:
     """
     Creates a GET request using `url`. If execution exceeds `timeout` (seconds), cancels the request.
 
@@ -44,7 +44,7 @@ async def fetch_http_get_response(url, timeout=TIMEOUT_SECONDS) -> HttpResponse:
         error_messages=errors
     )
 
-async def fetch_http_post_response(url, data_json=None, timeout=TIMEOUT_SECONDS) -> HttpResponse:
+async def fetch_http_post_response(url, data_json=None, timeout: float=TIMEOUT_SECONDS) -> HttpResponse:
     """
     Creates a POST request using `url` and `data_json`. If execution exceeds `timeout` (seconds), cancels the request.
 
