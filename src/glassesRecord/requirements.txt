@@ -1,5 +1,10 @@
+questionary
 textual
 textual-dev
+aiohttp<3.14 # TODO aioresponses
 numpy
 requests
 pupil_labs_realtime_api
+pytz
+pydantic
+anyio

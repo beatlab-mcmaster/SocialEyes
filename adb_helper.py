@@ -5,21 +5,31 @@ adb_helper.py
 Cross-platform helper script to monitor USB-connected Android devices
 and automatically convert them to TCP/IP adb connections.
 
+Notes:
+- ANDROID_PLATFORM_TOOLS environment variable can be set to specify the location of adb.
+- If adb is not found, the script will provide instructions to install it.
+
 Author: Alex
 """
 
+import os
+import platform
+import re
+import shutil
 import subprocess
 import sys
-import platform
 import time
-import re
-import os
-import shutil
-from typing import Optional, List, Tuple
 
 
-def find_adb():
-    """Find ADB executable (cross-platform)."""
+def find_adb() -> str | None:
+    """
+    Find ADB executable (cross-platform).
+
+    Returns
+    -------
+    str | None
+        Path to adb executable if found, otherwise None.
+    """
     # Check ANDROID_PLATFORM_TOOLS environment variable first
     if "ANDROID_PLATFORM_TOOLS" in os.environ:
         tools_dir = os.environ["ANDROID_PLATFORM_TOOLS"]
@@ -43,7 +53,7 @@ def find_adb():
     return None
 
 
-def run_adb_command(adb_path: str, args: List[str], timeout: int = 10) -> Tuple[bool, str]:
+def run_adb_command(adb_path: str, args: list[str], timeout: int = 10) -> tuple[bool, str]:
     """
     Run an ADB command and return success status and output.
     
@@ -61,13 +71,13 @@ def run_adb_command(adb_path: str, args: List[str], timeout: int = 10) -> Tuple[
             capture_output=True,
             text=True,
             timeout=timeout,
+            stdin=subprocess.DEVNULL
         )
         return result.returncode == 0, result.stdout + result.stderr
     except subprocess.TimeoutExpired:
         return False, f"Command timed out after {timeout} seconds"
     except Exception as e:
         return False, str(e)
-
 
 def check_and_handle_unauthorized(adb_path: str, device_id: str) -> bool:
     """
@@ -78,26 +88,24 @@ def check_and_handle_unauthorized(adb_path: str, device_id: str) -> bool:
     success, output = run_adb_command(adb_path, ["devices"], timeout=5)
     
     if "unauthorized" in output.lower() and device_id in output:
-        print(f"\n   ⚠️  Device is UNAUTHORIZED")
-        print("   " + "─" * 54)
-        print("   ACTION REQUIRED on your phone:")
-        print("   1. Look for USB debugging authorization dialog (or re-connect USB cable)")
-        print("   2. CHECK the box 'Always allow from this computer'")
-        print("   3. Tap 'Allow' to permit debugging")
-        print("   " + "─" * 54)
+        print(f"\nDevice is UNAUTHORIZED")
+        print("- ACTION REQUIRED on your phone:")
+        print("  1. Look for USB debugging authorization dialog")
+        print("  2. CHECK the box 'Always allow from this computer'")
+        print("  3. Tap 'Allow' to permit debugging")
         
         # Wait for user to authorize (with timeout)
-        print("   Waiting for authorization (timeout: 30 seconds)...", end="", flush=True)
+        print("- Waiting for authorization (timeout: 30 seconds)...", end="", flush=True)
         for attempt in range(30):
             time.sleep(1)
             success, check_output = run_adb_command(adb_path, ["devices"], timeout=5)
             if "device" in check_output and device_id in check_output and "unauthorized" not in check_output:
-                print(" ✓")
-                print("   ✓ Device authorized!")
+                print()
+                print("  - OK Device authorized!")
                 return True
             print(".", end="", flush=True)
-        
-        print("\n   ❌ Device authorization timed out")
+        print()
+        print("  - ERROR Device authorization timed out")
         return False
     
     return True
@@ -108,7 +116,7 @@ def get_connected_devices(adb_path: str):
     success, output = run_adb_command(adb_path, ["devices"])
 
     if not success:
-        print(f"❌ Failed to query ADB devices: {output}")
+        print(f"ERROR Failed to query ADB devices: {output}")
         return []
 
     devices = []
@@ -140,21 +148,21 @@ def get_connected_devices(adb_path: str):
     return devices, unauthorized_devices
 
 
-def enable_tcpip_on_device(adb_path: str, device_id: str) -> Tuple[bool, str]:
-    """Enable TCP/IP mode on a USB-connected device."""
-    print(f"   Enabling TCP/IP mode...")
+def enable_tcpip_on_device(adb_path: str, device_id: str) -> tuple[bool, str]:
+    """Enable TCP/IP on a USB-connected device."""
+    print(f"- Enabling ADB TCP/IP port on phone...")
     success, output = run_adb_command(adb_path, ["-s", device_id, "tcpip", "5555"])
 
     if success:
-        print(f"   ✓ TCP/IP mode enabled on port 5555")
+        print(f"  OK ADB TCP/IP port on phone enabled!")
         return True, ""
     else:
-        print(f"   ❌ Failed to enable TCP/IP mode: {output}")
+        print(f"  ERROR Failed to enable TCP/IP port: {output}")
         return False, output
 
 
-def get_device_ip(adb_path: str, device_id: str, max_retries: int = 5) -> Optional[str]:
-    """Get the IP address of a device."""
+def get_device_ip(adb_path: str, device_id: str, max_retries: int = 5) -> str | None:
+    """Get the IP address of the Wi-Fi interface of a device."""
     for attempt in range(max_retries):
         success, output = run_adb_command(
             adb_path,
@@ -174,18 +182,18 @@ def get_device_ip(adb_path: str, device_id: str, max_retries: int = 5) -> Option
     return None
 
 
-def connect_device_via_ip(adb_path: str, ip_address: str) -> Tuple[bool, str]:
+def connect_device_via_ip(adb_path: str, ip_address: str) -> tuple[bool, str]:
     """Connect to device via TCP/IP."""
     endpoint = f"{ip_address}:5555"
-    print(f"   Connecting to {endpoint}...")
+    print(f"  - Connecting to {endpoint}...")
 
     success, output = run_adb_command(adb_path, ["connect", endpoint])
 
     if success or "connected to" in output.lower():
-        print(f"   ✓ Connected: {ip_address}")
+        print(f"    - OK")
         return True, ip_address
     else:
-        print(f"   ❌ Failed to connect: {output}")
+        print(f"    - ERROR Failed to connect: {output}")
         return False, ""
 
 
@@ -195,12 +203,15 @@ def monitor_devices(adb_path: str):
     print("SocialEyes ADB Connection Helper")
     print("=" * 60)
     print()
+    print("After each phone restart, ADB TCP/IP must be re-enabled.")
+    print("Instructions: Make sure \"USB debugging\" is enabled, then connect the phone via USB and unlock the display.")
+    print()
     print("Monitoring for USB-connected devices...")
     print("Press Ctrl+C to exit\n")
 
     processed_devices = set()
     unauthorized_devices_notified = set()
-    poll_interval = 1  # seconds
+    poll_interval = 0.5  # seconds
 
     try:
         while True:
@@ -209,7 +220,7 @@ def monitor_devices(adb_path: str):
             # Handle unauthorized devices
             for device_id in unauthorized_devices:
                 if device_id not in unauthorized_devices_notified:
-                    print(f"\n🔌 New device detected (UNAUTHORIZED): {device_id}")
+                    print(f"\nNew device detected (UNAUTHORIZED): {device_id}")
                     unauthorized_devices_notified.add(device_id)
                     
                     if check_and_handle_unauthorized(adb_path, device_id):
@@ -223,7 +234,7 @@ def monitor_devices(adb_path: str):
                 if device_id in processed_devices:
                     continue
 
-                print(f"\n🔌 New device detected: {device_id}")
+                print(f"\nNew device detected: {device_id}")
                 processed_devices.add(device_id)
 
                 # Step 1: Enable TCP/IP
@@ -231,26 +242,26 @@ def monitor_devices(adb_path: str):
                     continue
 
                 # Step 2: Wait for device to restart and get IP
-                print("   Initializing TCP/IP connection...")
+                print("- Initializing TCP/IP connection...")
                 time.sleep(2.5)  # Give device time to restart
 
                 ip_address = get_device_ip(adb_path, device_id)
                 if not ip_address:
-                    print("   ❌ Could not retrieve device IP address")
+                    print("  - ERROR Could not retrieve device IP address")
                     processed_devices.discard(device_id)  # Retry on next detection
                     continue
 
                 # Step 3: Connect via TCP/IP
                 success, _ = connect_device_via_ip(adb_path, ip_address)
                 if success:
-                    print(f"   ✅ Successfully connected {device_id} at {ip_address}")
+                    print(f"- OK Successfully connected to {device_id} at {ip_address}")
                 else:
                     processed_devices.discard(device_id)  # Retry on next detection
 
             time.sleep(poll_interval)
 
     except KeyboardInterrupt:
-        print("\n\n✓ Monitoring stopped")
+        print("\n\nMonitoring stopped")
 
 
 def main():
@@ -258,18 +269,20 @@ def main():
     adb_path = find_adb()
 
     if not adb_path:
-        print("❌ ADB executable not found")
-        print("\nTried the following locations:")
+        print("ERROR: ADB executable not found")
+        print()
+        print("Tried the following locations:")
         print("  1. ANDROID_PLATFORM_TOOLS environment variable")
         print("  2. System PATH")
         print("  3. ~/.android/platform-tools/adb")
-        print("  4. Android SDK installation directories")
-        print("\nTo fix this:")
-        print("  • Option A: Set environment variable:")
-        print("    export ANDROID_PLATFORM_TOOLS=/path/to/platform-tools")
-        print("  • Option B: Install Android SDK Platform Tools:")
-        print("    https://developer.android.com/tools/releases/platform-tools")
-        print("  • Option C: Run 'python quickstart.py' to auto-download ADB")
+        print()
+        print("To fix this:")
+        print("- Option A: Run quickstart.py to auto-download ADB and")
+        print("    unzip it to ~/.android/platform-tools/")
+        print("- Option B: Download/install Android SDK Platform Tools and")
+        print("    ensure adb is in your PATH or set ANDROID_PLATFORM_TOOLS environment variable")
+        print("    https://developer.android.com/tools/releases/platform-tools#downloads")
+        
         sys.exit(1)
 
     print(f"Found ADB: {adb_path}\n")
@@ -281,5 +294,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\nError: {e}")
         sys.exit(1)

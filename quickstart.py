@@ -11,17 +11,17 @@ the user to proceed with the demo.
 Author: Alex
 """
 
+import os
+import platform
+import shutil
+import stat
 import subprocess
 import sys
-import platform
-import os
-import shutil
-import urllib.request
 import tempfile
+import urllib.request
 import zipfile
-import stat
 from pathlib import Path
-from typing import Tuple, Optional
+
 try:
     from colorama import init
     init(autoreset=True)
@@ -62,22 +62,22 @@ def print_step(step: int, text: str):
 
 def print_ok(text: str):
     """Print success message."""
-    print(f"{Colors.OKGREEN}✓ {text}{Colors.ENDC}")
+    print(f"{Colors.OKGREEN}OK {text}{Colors.ENDC}")
 
 
 def print_warn(text: str):
     """Print warning message."""
-    print(f"{Colors.WARNING}⚠ {text}{Colors.ENDC}")
+    print(f"{Colors.WARNING}WARNING {text}{Colors.ENDC}")
 
 
 def print_error(text: str):
     """Print error message."""
-    print(f"{Colors.FAIL}✗ {text}{Colors.ENDC}")
+    print(f"{Colors.FAIL}ERROR {text}{Colors.ENDC}")
 
 
 def print_info(text: str):
     """Print info message."""
-    print(f"{Colors.OKCYAN}ℹ {text}{Colors.ENDC}")
+    print(f"{Colors.OKCYAN}INFO {text}{Colors.ENDC}")
 
 
 def run_command(cmd, capture=False, check=True, timeout=5, stream=False):
@@ -105,38 +105,19 @@ def check_python_version() -> bool:
     version_str = f"{version.major}.{version.minor}.{version.micro}"
 
     if version.major >= 3 and version.minor >= 10:
-        print_ok(f"Python {version_str} ✓")
+        print_ok(f"Python {version_str}")
         return True
     else:
         print_error(f"Python {version_str} (requires 3.10+)")
         return False
 
 
-def find_executable(name: str) -> Optional[str]:
+def find_executable(name: str) -> str | None:
     """Find executable in PATH."""
     return shutil.which(name)
 
 
-def check_docker() -> Tuple[bool, Optional[str]]:
-    """Check if Docker is installed and running."""
-    print_step(2, "Checking Docker...")
-    docker_path = find_executable("docker")
-
-    if not docker_path:
-        return False, None
-
-    print_ok(f"Docker found: {docker_path}")
-
-    # Check if Docker daemon is running
-    success, _ = run_command(["docker", "info"], capture=True, check=False)
-    if success:
-        print_ok("Docker daemon is running")
-        return True, docker_path
-    else:
-        return False, docker_path
-
-
-def download_adb() -> Optional[str]:
+def download_adb() -> str | None:
     """Download and extract ADB for the current platform."""
     system = platform.system()
     
@@ -199,9 +180,9 @@ def download_adb() -> Optional[str]:
         return None
 
 
-def check_adb(offer_download=True) -> Tuple[bool, Optional[str]]:
+def check_adb(offer_download=True) -> tuple[bool, str | None]:
     """Check if ADB is available or offer to download it."""
-    print_step(3, "Checking ADB (Android SDK Platform Tools)...")
+    print_step(2, "Checking ADB (Android SDK Platform Tools)...")
 
     # Check ANDROID_PLATFORM_TOOLS environment variable first
     if "ANDROID_PLATFORM_TOOLS" in os.environ:
@@ -247,7 +228,7 @@ def check_adb(offer_download=True) -> Tuple[bool, Optional[str]]:
 
 def check_git_submodules():
     """Check if git submodules are initialized."""
-    print_step(4, "Checking Git submodules...")
+    print_step(3, "Checking Git submodules...")
 
     # Check if .gitmodules exists and submodules are initialized
     gitmodules_path = Path(".gitmodules")
@@ -292,42 +273,19 @@ def setup_environment_check() -> bool:
         return False
 
     checks_passed = 0
-    checks_total = 4
+    checks_total = 3
 
     if check_python_version():
         checks_passed += 1
     else:
         return False
 
-    docker_ok, docker_path = check_docker()
-    if docker_ok:
-        checks_passed += 1
-    elif docker_path:
-        # Docker is installed but daemon is not running
-        print_error("Docker daemon is not running")
-        system = platform.system()
-        if system == "Darwin":
-            print_info("Start Docker Desktop on macOS and run this script again:")
-            print_info("  • Click the Docker icon in Spotlight (Cmd+Space, type 'Docker')")
-            print_info("  • Or open: /Applications/Docker.app")
-        elif system == "Windows":
-            print_info("Start Docker Desktop on Windows and run this script again:")
-            print_info("  • Click Start menu and search for 'Docker Desktop'")
-        else:
-            print_info("Start the Docker daemon and run this script again:")
-            print_info("  • systemctl start docker")
-        print()
-        return False
-    else:
-        # Docker is not installed
-        print_error("Docker is required for this setup")
-        print_info("Install Docker from: https://www.docker.com/products/docker-desktop/")
-        print()
-        return False
-
     adb_ok, adb_path = check_adb(offer_download=True)
     if adb_ok:
         checks_passed += 1
+    if adb_path is not None:
+        os.environ["ADB_PATH"] = str(Path(adb_path).resolve())
+        print_info(f"ADB_PATH set to: {os.environ['ADB_PATH']}")
 
     if check_git_submodules():
         checks_passed += 1
@@ -335,7 +293,7 @@ def setup_environment_check() -> bool:
     print()
     print(f"Environment checks: {checks_passed}/{checks_total} passed")
 
-    return checks_passed >= 4  # Need Python + Docker + ADB + Git submodules
+    return checks_passed >= checks_total  # Need Python + ADB + Git submodules
 
 
 def install_requirements_source() -> bool:
@@ -356,29 +314,6 @@ def install_requirements_source() -> bool:
         print(output)
         return False
 
-
-def build_docker_image() -> bool:
-    """Build the Docker image."""
-    print_step(6, "Building Docker image...")
-
-    if not os.path.exists("Dockerfile"):
-        print_error("Dockerfile not found")
-        return False
-
-    print_info("Building image (this may take 5-15 minutes on first build)...\n")
-
-    success, _ = run_command(["docker", "build", "-t", "socialeyes-img", "."], check=False, stream=True, timeout=None)
-
-    if success:
-        print()
-        print_ok("Docker image built successfully")
-        return True
-    else:
-        print()
-        print_error("Failed to build Docker image")
-        return False
-
-
 def validate_source_installation() -> bool:
     """Validate that source installation is ready."""
     print_step(7, "Validating source installation...")
@@ -397,19 +332,6 @@ def validate_source_installation() -> bool:
         print_error("Missing required package: questionary")
         return False
 
-
-def validate_docker_image() -> bool:
-    """Check if Docker image is available, build if needed."""
-    success, output = run_command(["docker", "image", "inspect", "socialeyes-img"], capture=True, check=False)
-
-    if success:
-        print_ok("Docker image already exists")
-        return True
-    else:
-        print_info("Docker image not found. Building now...")
-        return build_docker_image()
-
-
 def setup_source_mode() -> bool:
     """Setup and validate source mode."""
     print_header("Setting Up Source Mode")
@@ -417,21 +339,11 @@ def setup_source_mode() -> bool:
     if not install_requirements_source():
         return False
 
-    if not validate_source_installation():
-        return False
+    return validate_source_installation()
 
-    return True
-
-
-def setup_container_mode() -> bool:
-    """Build and validate Docker image."""
-    print_header("Docker Setup")
-    return build_docker_image()
-
-
-def launch_demo_source() -> bool:
+def launch_demo() -> bool:
     """Launch demo in source mode."""
-    print_header("Launching Demo (Source Mode)")
+    print_header("Launching Demo")
     print("Starting demo.py...\n")
 
     if not os.path.exists("demo.py"):
@@ -439,27 +351,12 @@ def launch_demo_source() -> bool:
         return False
 
     try:
-        subprocess.run([sys.executable, "demo.py"], check=False)
-        return True
-    except KeyboardInterrupt:
-        print("\n\nDemo stopped by user")
-        return True
-    except Exception as e:
-        print_error(f"Failed to launch demo: {e}")
-        return False
-
-
-def launch_demo_container() -> bool:
-    """Launch demo in container mode by invoking demo_docker.py."""
-    print_header("Launching Demo (Docker Mode)")
-    print("Starting demo in Docker container...\n")
-
-    if not os.path.exists("demo_docker.py"):
-        print_error("demo_docker.py not found")
-        return False
-
-    try:
-        subprocess.run([sys.executable, "demo_docker.py"], check=False)
+        is_macos = platform.system() == "Darwin"
+        if is_macos:
+            cmd = f"ulimit -n 1024 && {sys.executable} demo.py"
+        else:
+            cmd = f"{sys.executable} demo.py"
+        subprocess.run(cmd, check=False, shell=True)
         return True
     except KeyboardInterrupt:
         print("\n\nDemo stopped by user")
@@ -471,24 +368,24 @@ def launch_demo_container() -> bool:
 
 def print_next_steps() -> str:
     """Print next steps and action menu, return user's choice."""
-    print_header("Setup Complete! 🎉")
+    print_header("Setup Complete!")
 
     print("You're ready to use SocialEyes!\n")
 
     print(f"{Colors.BOLD}Quick commands:{Colors.ENDC}")
-    print("  • Run the demo in Docker:")
-    print(f"    {Colors.OKCYAN}python demo_docker.py{Colors.ENDC}")
-    print("  • Connect phones via ADB:")
+    print("- Setup ADB connection between this computer and the phones:")
     print(f"    {Colors.OKCYAN}python adb_helper.py{Colors.ENDC}\n")
+    print("- Run the demo.py:")
+    print(f"    {Colors.OKCYAN}python demo.py{Colors.ENDC}")
 
     print(f"{Colors.BOLD}For more information:{Colors.ENDC}")
-    print("  - See README.md for detailed documentation")
-    print("  - Visit: https://github.com/beatlab-mcmaster/SocialEyes\n")
+    print("- See README.md for detailed documentation")
+    print("- Visit: https://github.com/beatlab-mcmaster/SocialEyes\n")
 
     print(f"{Colors.BOLD}What would you like to do?{Colors.ENDC}\n")
 
-    print("  [1] Run the demo in Docker")
-    print("  [2] Connect phones via ADB")
+    print("  [1] Run the demo")
+    print("  [2] Setup ADB connection")
     print("  [3] Exit")
 
     print()
@@ -523,16 +420,16 @@ def launch_connect_helper() -> bool:
 def handle_user_action(choice: str):
     """Handle the user's chosen action."""
     actions = {
-        "1": ("Start demo in Docker", lambda: launch_demo_container()),
-        "2": ("Use ADB Helper", lambda: launch_connect_helper()),
+        "1": ("Start demo", lambda: launch_demo()),
+        "2": ("Setup ADB connection", lambda: launch_connect_helper()),
     }
 
     if choice == "3":
-        print("\n✓ Exiting SocialEyes quickstart")
+        print("\nExiting SocialEyes quickstart")
         return False
 
     action_name, action_func = actions[choice]
-    print(f"\n{Colors.BOLD}→ {action_name}{Colors.ENDC}")
+    print(f"\n{Colors.BOLD}- {action_name}{Colors.ENDC}")
     return action_func()
 
 
@@ -542,11 +439,6 @@ def main():
         # Step 1: Environment checks
         if not setup_environment_check():
             print_error("Environment validation failed. Please check the errors above.")
-            sys.exit(1)
-
-        # Step 2: Setup Docker (check/build image as needed)
-        if not validate_docker_image():
-            print_error("Docker image setup failed")
             sys.exit(1)
 
         # Step 3: Show action menu
@@ -567,7 +459,7 @@ def main():
                 .lower()
             )
             if response != "y":
-                print("\n✓ Exiting SocialEyes quickstart")
+                print("\nExiting SocialEyes quickstart")
                 break
 
     except KeyboardInterrupt:
