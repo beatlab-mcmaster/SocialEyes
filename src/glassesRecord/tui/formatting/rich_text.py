@@ -1,0 +1,69 @@
+import numbers
+
+from rich.style import Style
+from rich.text import Text
+
+
+def as_colored_text(val, **kwargs):
+    """Convert a value into a Rich colored text representation.
+
+    Args:
+        val: The value to convert.
+        **kwargs: Additional arguments for color styling.
+
+    Returns:
+        Text: A styled Text object based on the value.
+    """
+    if val is None:
+        none_style = kwargs.get('none_style', Style())
+        return Text('-', style=none_style)
+    elif isinstance(val, bool):
+        return Text(str(val), style=get_style_bool(val, kwargs.get('reverse', False)))
+    elif isinstance(val, numbers.Number):
+        if kwargs.get('reverse'):
+            return Text(str(val), style=get_style_num(-val, -kwargs['thresh_low'], -kwargs['thresh_high']))
+        else:
+            return Text(str(val), style=get_style_num(val, kwargs['thresh_low'], kwargs['thresh_high']))
+    else:
+        return Text(str(val), style=kwargs.get('style', Style()))
+
+def get_style_num(val, thresh_low, thresh_high) -> Style:
+    """Determine the style for numeric values based on thresholds.
+
+    Args:
+        val (float): The numeric value.
+        thresh_low (float): The lower threshold.
+        thresh_high (float): The upper threshold.
+
+    Returns:
+        Style: The style to apply based on the value.
+    """
+    if val == None:
+        return Style()
+    elif val <= thresh_low:
+        return Style(color="red")
+    elif thresh_high > val > thresh_low:
+        return Style(color="yellow")
+    elif val >= thresh_high:
+        return Style(color="green")
+    else:
+        return Style()
+
+def get_style_bool(val, reverse=False) -> Style:
+    """Determine the style for boolean values.
+
+    Args:
+        val (bool or None): The boolean value to evaluate.
+
+    Returns:
+        Style: The style to apply based on the value:
+             - green if True
+             - red if False
+             - default (empty) if None
+    """
+    if val == None:
+        return Style()
+    elif val:
+        return Style(color="red") if reverse else Style(color="green")
+    else:
+        return Style(color="green") if reverse else Style(color="red")

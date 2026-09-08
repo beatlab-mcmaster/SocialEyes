@@ -1,5 +1,5 @@
 # -------- Base: Python + Debian slim --------
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /SocialEyes
@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     adb \
     iputils-ping \
+    htop \
  && rm -rf /var/lib/apt/lists/*
 
 # Create a dedicated venv OUTSIDE the bind mount, and add to PATH
